@@ -1909,6 +1909,7 @@ function str_perfil(el, p) {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:800;color:#fff">@${p.nick||p.nombre}</div>
           <span class="badge badge-green">🎤 Streamer</span>
+          <span id="strNivelBadge" class="badge" style="background:rgba(212,175,55,0.1);color:var(--gold);border-color:rgba(212,175,55,0.3)">🥉 Bronce</span>
           ${p.pais?`<span style="font-size:14px">${p.pais}</span>`:''}
         </div>
         <div style="font-size:11px;color:var(--mu);font-family:'JetBrains Mono',monospace;margin-top:4px">ID: ${p.uid?.slice(-8)||'—'}</div>
@@ -1994,15 +1995,84 @@ function str_perfil(el, p) {
         </div>
       </div>
 
+      <!-- FRECUENCIA DE PAGO -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:12px">💳 Frecuencia de pago</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:12px">¿Cada cuándo quieres recibir tus ganancias?</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          ${['semanal','quincenal','mensual'].map((f,i)=>`
+            <button onclick="strSelFrecuencia('${f}',this)" id="strFrec_${f}" style="padding:12px 6px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);cursor:pointer;text-align:center;transition:all .2s">
+              <div style="font-size:16px;margin-bottom:4px">${['📅','🗓️','📆'][i]}</div>
+              <div style="font-size:11px;font-weight:600;color:#fff;text-transform:capitalize">${f}</div>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- MI NIVEL ACTUAL -->
+      <div class="card" style="margin-bottom:14px;background:rgba(212,175,55,0.04);border-color:rgba(212,175,55,0.2)">
+        <div class="section-title" style="margin-bottom:12px">🏆 Mi nivel y comisiones</div>
+        <div id="strNivelInfo" style="text-align:center;padding:10px;color:var(--mu)">Cargando...</div>
+      </div>
+
       <button class="btn-primary" onclick="strGuardarPerfil()" style="width:100%;padding:16px;margin-bottom:10px">Guardar perfil</button>
       <button class="sidebar-signout" style="width:100%;margin-bottom:20px" onclick="signOut()">→ Cerrar Sesión</button>
     </div>
   `;
 
   // Cargar datos existentes
+  window.strSelFrecuencia = function(f, btn) {
+    document.querySelectorAll('[id^="strFrec_"]').forEach(b => {
+      b.style.background = 'rgba(255,255,255,0.03)';
+      b.style.borderColor = 'rgba(255,255,255,0.08)';
+      b.style.color = '#fff';
+    });
+    btn.style.background = 'rgba(212,175,55,0.12)';
+    btn.style.borderColor = 'rgba(212,175,55,0.5)';
+    btn.dataset.selected = '1';
+    window._strFrecuencia = f;
+  };
+
   window.fsGet?.('usuarios', p.uid).then(perfil => {
     if (!perfil) return;
     const set = (id, val) => { const el2=document.getElementById(id); if(el2&&val) el2.value=val; };
+
+    // Nivel badge
+    const nv = window.getNivel?.(perfil.nivel||'bronce');
+    const badge = document.getElementById('strNivelBadge');
+    if (badge && nv) badge.textContent = `${nv.emoji} ${nv.nombre}`;
+
+    // Nivel info
+    const nivelInfo = document.getElementById('strNivelInfo');
+    if (nivelInfo && nv) {
+      nivelInfo.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="padding:10px;background:rgba(34,197,94,0.08);border-radius:10px;border:1px solid rgba(34,197,94,0.2)">
+            <div style="font-size:10px;color:var(--mu)">Tú recibes</div>
+            <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:#22c55e">${nv.streamer}%</div>
+          </div>
+          <div style="padding:10px;background:rgba(167,139,250,0.08);border-radius:10px;border:1px solid rgba(167,139,250,0.2)">
+            <div style="font-size:10px;color:var(--mu)">Agencia</div>
+            <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:#A78BFA">${nv.agencia}%</div>
+          </div>
+          <div style="padding:10px;background:rgba(212,175,55,0.08);border-radius:10px;border:1px solid rgba(212,175,55,0.2)">
+            <div style="font-size:10px;color:var(--mu)">AURA</div>
+            <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:var(--gold)">${nv.master}%</div>
+          </div>
+        </div>
+        ${perfil.modo_prueba?`<div style="margin-top:10px;padding:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;font-size:11px;color:#EF4444;text-align:center">⚠️ Estás en Modo Prueba · Semana ${perfil.semanas_prueba||0}/2</div>`:''}
+      `;
+    }
+
+    // Frecuencia de pago
+    if (perfil.frecuencia_pago) {
+      window._strFrecuencia = perfil.frecuencia_pago;
+      const btn = document.getElementById('strFrec_'+perfil.frecuencia_pago);
+      if (btn) {
+        btn.style.background = 'rgba(212,175,55,0.12)';
+        btn.style.borderColor = 'rgba(212,175,55,0.5)';
+      }
+    }
     set('strNombreReal', perfil.nombre_real);
     set('strFechaNac', perfil.fecha_nac);
     set('strGenero', perfil.genero);
@@ -2091,6 +2161,7 @@ function str_perfil(el, p) {
     // Quitar campos vacíos
     Object.keys(datos).forEach(k => { if(!datos[k] || datos[k]==='') delete datos[k]; });
 
+    if (window._strFrecuencia) datos.frecuencia_pago = window._strFrecuencia;
     window.fsSet?.('usuarios', p.uid, datos)
       .then(()=>toast('Perfil actualizado ✓','success'))
       .catch(()=>toast('Error al guardar','error'));

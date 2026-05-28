@@ -683,115 +683,350 @@ function master_realtime(el, p) {
   window.master_realtime_reload();
 }
 
-// ── TARIFAS (Master configura precios) ───
+// ── TARIFAS + NIVELES + CARTERA ──────────
 function master_tarifas(el, p) {
   el.innerHTML = `
     <div class="dash-welcome aura-fade-up">
-      <h1>💰 <span>Tarifas</span></h1>
-      <p>Configura los precios de la plataforma</p>
+      <h1>⚙️ <span>Configuración</span></h1>
+      <p>Tarifas, niveles y cartera de AURA</p>
     </div>
-    <div id="masterTarifasContent">
-      <div style="text-align:center;padding:20px;color:var(--mu)">Cargando tarifas...</div>
+
+    <!-- TABS -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:12px">
+      ${['💳 Tarifas','🏆 Niveles','👜 Cartera'].map((t,i)=>`
+        <button onclick="masterTab(${i})" id="masterTab${i}" style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid ${i===0?'rgba(212,175,55,0.5)':'rgba(255,255,255,0.1)'};background:${i===0?'rgba(212,175,55,0.1)':'transparent'};color:${i===0?'var(--gold)':'var(--mu)'}">${t}</button>
+      `).join('')}
     </div>
+
+    <div id="masterTabContent"></div>
   `;
 
-  // Cargar tarifas actuales
-  window.fsGet?.('config_plataforma', 'tarifas').then(t => {
-    const tarifas = t || {};
-    const cont = document.getElementById('masterTarifasContent');
+  // Tab logic
+  window.masterTab = function(idx) {
+    document.querySelectorAll('[id^="masterTab"]').forEach((btn,i) => {
+      btn.style.background = i===idx?'rgba(212,175,55,0.1)':'transparent';
+      btn.style.borderColor = i===idx?'rgba(212,175,55,0.5)':'rgba(255,255,255,0.1)';
+      btn.style.color = i===idx?'var(--gold)':'var(--mu)';
+    });
+    if (idx===0) renderTarifasTab();
+    if (idx===1) renderNivelesTab();
+    if (idx===2) renderCarteraTab();
+  };
+
+  // ── TAB 1: TARIFAS ──
+  function renderTarifasTab() {
+    window.fsGet?.('config_plataforma','tarifas').then(t => {
+      const tf = t || {};
+      const cont = document.getElementById('masterTabContent');
+      if (!cont) return;
+      cont.innerHTML = `
+        <div class="card" style="margin-bottom:14px">
+          <div class="section-title" style="margin-bottom:4px">💬 Servicios</div>
+          <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Costo en ⭐ para el usuario</div>
+          ${[
+            {key:'mensaje',      label:'💬 Mensaje privado',        default:2},
+            {key:'audio',        label:'🎙️ Audio privado',          default:3},
+            {key:'llamada',      label:'📞 Llamada (por min)',       default:6},
+            {key:'match',        label:'⚡ Match (30 seg)',          default:5},
+            {key:'videollamada', label:'📹 Videollamada (por min)',  default:10},
+            {key:'foto',         label:'🖼️ Foto premium',           default:15},
+            {key:'video_premium',label:'🎬 Video premium',          default:30},
+          ].map(item=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+              <span style="font-size:13px">${item.label}</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input type="number" id="tf_${item.key}" value="${tf[item.key]||item.default}" min="1"
+                  style="width:60px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
+                <span style="color:var(--gold);font-weight:700">⭐</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="section-title" style="margin-bottom:14px">💰 Packs de estrellas</div>
+          ${[
+            {key:'pack_200',   label:'Pack 200⭐',   default:1},
+            {key:'pack_1000',  label:'Pack 1,000⭐', default:5},
+            {key:'pack_2000',  label:'Pack 2,000⭐', default:10},
+            {key:'pack_4000',  label:'Pack 4,000⭐', default:20},
+            {key:'pack_10000', label:'Pack 10,000⭐',default:50},
+            {key:'pack_20000', label:'Pack 20,000⭐',default:100},
+          ].map(item=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+              <span style="font-size:13px">${item.label}</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="color:var(--mu);font-size:12px">$</span>
+                <input type="number" id="tf_${item.key}" value="${tf[item.key]||item.default}" min="0.1" step="0.5"
+                  style="width:60px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
+                <span style="color:#22c55e;font-weight:700">USD</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <button onclick="masterGuardarTarifas()" class="btn-primary" style="width:100%;padding:16px">💾 Guardar tarifas</button>
+      `;
+    }).catch(()=>{});
+
+    window.masterGuardarTarifas = function() {
+      const get = id => parseFloat(document.getElementById(id)?.value) || 0;
+      const nuevas = {
+        mensaje:get('tf_mensaje'), audio:get('tf_audio'),
+        llamada:get('tf_llamada'), match:get('tf_match'),
+        videollamada:get('tf_videollamada'), foto:get('tf_foto'),
+        video_premium:get('tf_video_premium'),
+        pack_200:get('tf_pack_200'), pack_1000:get('tf_pack_1000'),
+        pack_2000:get('tf_pack_2000'), pack_4000:get('tf_pack_4000'),
+        pack_10000:get('tf_pack_10000'), pack_20000:get('tf_pack_20000'),
+      };
+      window._tarifasCache = null; // limpiar caché
+      window.fsSet?.('config_plataforma','tarifas', nuevas).then(()=>{
+        window.fsAdd?.('logs_master',{accion:'Tarifas actualizadas',uid_master:p.uid,tipo:'config'});
+        toast('✅ Tarifas guardadas en toda la plataforma','success');
+      }).catch(()=>toast('Error al guardar','error'));
+    };
+  }
+
+  // ── TAB 2: NIVELES ──
+  function renderNivelesTab() {
+    const cont = document.getElementById('masterTabContent');
     if (!cont) return;
+    const niveles = window.AURA_NIVELES || {};
 
     cont.innerHTML = `
-      <div class="card" style="margin-bottom:16px">
-        <div class="section-title" style="margin-bottom:4px">💬 Mensajes y llamadas</div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Costo en estrellas para el usuario</div>
-        ${[
-          {key:'mensaje', label:'💬 Mensaje privado', default:2},
-          {key:'llamada', label:'📞 Llamada (por min)', default:6},
-          {key:'videollamada', label:'📹 Videollamada (por min)', default:10},
-          {key:'match', label:'⚡ Match (30 seg)', default:5},
-        ].map(item=>`
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-            <span style="font-size:13px">${item.label}</span>
-            <div style="display:flex;align-items:center;gap:8px">
-              <input type="number" id="tarifa_${item.key}" value="${tarifas[item.key]||item.default}" min="1"
-                style="width:64px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
-              <span style="color:var(--gold);font-size:13px;font-weight:700">⭐</span>
+      <div style="margin-bottom:16px">
+        ${Object.values(niveles).map(n=>`
+          <div class="card" style="margin-bottom:10px;border-color:rgba(212,175,55,0.2)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              <span style="font-size:28px">${n.emoji}</span>
+              <div>
+                <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:var(--gold)">${n.nombre}</div>
+                <div style="font-size:11px;color:var(--mu)">Nivel ${n.orden}</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+              <div style="text-align:center;padding:10px;background:rgba(34,197,94,0.08);border-radius:10px;border:1px solid rgba(34,197,94,0.2)">
+                <div style="font-size:11px;color:var(--mu);margin-bottom:4px">Streamer</div>
+                <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:#22c55e">${n.streamer}%</div>
+              </div>
+              <div style="text-align:center;padding:10px;background:rgba(167,139,250,0.08);border-radius:10px;border:1px solid rgba(167,139,250,0.2)">
+                <div style="font-size:11px;color:var(--mu);margin-bottom:4px">Agencia</div>
+                <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:#A78BFA">${n.agencia}%</div>
+              </div>
+              <div style="text-align:center;padding:10px;background:rgba(212,175,55,0.08);border-radius:10px;border:1px solid rgba(212,175,55,0.2)">
+                <div style="font-size:11px;color:var(--mu);margin-bottom:4px">AURA</div>
+                <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:var(--gold)">${n.master}%</div>
+              </div>
             </div>
           </div>
         `).join('')}
       </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <div class="section-title" style="margin-bottom:4px">🖼️ Contenido premium</div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Precios de contenido exclusivo</div>
-        ${[
-          {key:'foto', label:'🖼️ Foto premium', default:15},
-          {key:'video_premium', label:'🎬 Video premium', default:30},
-          {key:'audio', label:'🎙️ Audio privado', default:3},
-        ].map(item=>`
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-            <span style="font-size:13px">${item.label}</span>
-            <div style="display:flex;align-items:center;gap:8px">
-              <input type="number" id="tarifa_${item.key}" value="${tarifas[item.key]||item.default}" min="1"
-                style="width:64px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
-              <span style="color:var(--gold);font-size:13px;font-weight:700">⭐</span>
-            </div>
-          </div>
-        `).join('')}
+      <!-- MODO PRUEBA -->
+      <div class="card" style="margin-bottom:14px;border-color:rgba(239,68,68,0.3)">
+        <div class="section-title" style="margin-bottom:4px;color:#EF4444">🚨 Modo Prueba</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Si la streamer no llega a la meta en 2 semanas, pierde sus estrellas</div>
+        <div class="input-group" style="margin-bottom:10px">
+          <span class="input-icon">👤</span>
+          <input type="text" id="modoPruebaEmail" placeholder="Email de la streamer">
+        </div>
+        <button onclick="masterActivarPrueba()" style="width:100%;padding:12px;border-radius:var(--r-lg);background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#EF4444;font-weight:700;font-size:13px;cursor:pointer">
+          🚨 Activar Modo Prueba
+        </button>
       </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <div class="section-title" style="margin-bottom:4px">💎 Comisiones</div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Porcentaje de ganancias</div>
-        ${[
-          {key:'comision_streamer', label:'🎤 Streamer recibe', default:85},
-          {key:'comision_agencia', label:'🏢 Agencia recibe', default:15},
-        ].map(item=>`
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-            <span style="font-size:13px">${item.label}</span>
-            <div style="display:flex;align-items:center;gap:8px">
-              <input type="number" id="tarifa_${item.key}" value="${tarifas[item.key]||item.default}" min="1" max="100"
-                style="width:64px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
-              <span style="color:var(--gold);font-size:13px;font-weight:700">%</span>
-            </div>
+      <!-- GESTIÓN MANUAL DE NIVEL -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:14px">✏️ Cambiar nivel manualmente</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="input-group">
+            <span class="input-icon">👤</span>
+            <input type="text" id="cambiarNivelEmail" placeholder="Email de la streamer">
           </div>
-        `).join('')}
-        <div style="font-size:11px;color:var(--mu);margin-top:10px;padding:10px;background:rgba(212,175,55,0.05);border-radius:8px">
-          ⚠️ La suma de Streamer + Agencia debe ser 100%
+          <select id="cambiarNivelVal" style="background:var(--black3);border:1px solid var(--border2);color:var(--white);border-radius:var(--r-lg);padding:12px;font-size:13px">
+            <option value="bronce">🥉 Bronce</option>
+            <option value="plata">🥈 Plata</option>
+            <option value="oro">🥇 Oro</option>
+            <option value="diamante">💎 Diamante</option>
+          </select>
+          <button onclick="masterCambiarNivel()" class="btn-sm" style="padding:12px">Cambiar nivel</button>
         </div>
       </div>
 
-      <button onclick="masterGuardarTarifas()" class="btn-primary" style="width:100%;padding:16px">
-        💾 Guardar tarifas en toda la plataforma
-      </button>
+      <!-- STREAMERS Y SUS NIVELES -->
+      <div class="section-title" style="margin-bottom:10px">👩 Niveles actuales</div>
+      <div id="masterNivelesStreamers">
+        <div style="text-align:center;padding:20px;color:var(--mu)">Cargando...</div>
+      </div>
     `;
 
-    window.masterGuardarTarifas = function() {
-      const get = id => parseInt(document.getElementById(id)?.value) || 0;
-      const nuevasTarifas = {
-        mensaje: get('tarifa_mensaje'),
-        llamada: get('tarifa_llamada'),
-        videollamada: get('tarifa_videollamada'),
-        match: get('tarifa_match'),
-        foto: get('tarifa_foto'),
-        video_premium: get('tarifa_video_premium'),
-        audio: get('tarifa_audio'),
-        comision_streamer: get('tarifa_comision_streamer'),
-        comision_agencia: get('tarifa_comision_agencia'),
-      };
-      window.fsSet?.('config_plataforma', 'tarifas', nuevasTarifas).then(()=>{
-        window.fsAdd?.('logs_master', {
-          accion: 'Tarifas actualizadas',
-          uid_master: p.uid, tipo: 'config'
+    // Cargar streamers con sus niveles
+    cargarUsuariosReales?.().then(usuarios => {
+      const streamers = usuarios.filter(u=>u.rol==='streamer');
+      const cont2 = document.getElementById('masterNivelesStreamers');
+      if (!cont2) return;
+      if (streamers.length === 0) {
+        cont2.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mu)">No hay streamers registradas aún.</div>`;
+        return;
+      }
+      cont2.innerHTML = streamers.map(s=>{
+        const nv = window.getNivel?.(s.nivel||'bronce');
+        return `
+          <div class="card card-row" style="margin-bottom:8px">
+            <div class="card-avatar">${(s.nick||s.nombre||'?')[0].toUpperCase()}</div>
+            <div class="card-info">
+              <div class="card-name">@${s.nick||s.nombre}</div>
+              <div class="card-sub">${s.email||'—'}</div>
+            </div>
+            <span style="font-size:18px">${nv?.emoji||'🥉'}</span>
+            <span class="badge" style="background:rgba(212,175,55,0.1);color:var(--gold);border-color:rgba(212,175,55,0.3)">${nv?.nombre||'Bronce'}</span>
+            ${s.modo_prueba?'<span class="badge badge-red" style="font-size:9px">⚠️ Prueba</span>':''}
+            <span style="font-size:11px;color:var(--gold)">${(s.estrellas||0).toLocaleString()}⭐</span>
+          </div>
+        `;
+      }).join('');
+    });
+
+    window.masterActivarPrueba = function() {
+      const email = document.getElementById('modoPruebaEmail')?.value?.trim();
+      if (!email) { toast('Ingresa el email','error'); return; }
+      cargarUsuariosReales?.().then(usuarios => {
+        const s = usuarios.find(u=>u.email===email&&u.rol==='streamer');
+        if (!s) { toast('Streamer no encontrada','error'); return; }
+        window.fsSet?.('usuarios', s.id, { modo_prueba:true, semanas_prueba:0 }).then(()=>{
+          window.fsAdd?.('logs_master',{accion:`Modo prueba activado: @${s.nick}`,uid_master:p.uid,tipo:'prueba'});
+          toast(`⚠️ Modo prueba activado para @${s.nick}`,'success');
         });
-        toast('✅ Tarifas actualizadas en toda la plataforma','success');
-      }).catch(()=>toast('Error al guardar','error'));
+      });
     };
-  }).catch(()=>{
-    const cont = document.getElementById('masterTarifasContent');
-    if (cont) cont.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mu)">Error cargando tarifas.</div>`;
-  });
+
+    window.masterCambiarNivel = function() {
+      const email = document.getElementById('cambiarNivelEmail')?.value?.trim();
+      const nivel = document.getElementById('cambiarNivelVal')?.value;
+      if (!email) { toast('Ingresa el email','error'); return; }
+      cargarUsuariosReales?.().then(usuarios => {
+        const s = usuarios.find(u=>u.email===email&&u.rol==='streamer');
+        if (!s) { toast('Streamer no encontrada','error'); return; }
+        window.fsSet?.('usuarios', s.id, { nivel }).then(()=>{
+          window.fsAdd?.('logs_master',{accion:`Nivel cambiado a ${nivel}: @${s.nick}`,uid_master:p.uid,tipo:'nivel'});
+          toast(`✅ @${s.nick} ahora es ${window.getNivel(nivel).emoji} ${window.getNivel(nivel).nombre}`,'success');
+          renderNivelesTab();
+        });
+      });
+    };
+  }
+
+  // ── TAB 3: CARTERA ──
+  function renderCarteraTab() {
+    window.fsGet?.('config_plataforma','cartera').then(cartera => {
+      const cont = document.getElementById('masterTabContent');
+      if (!cont) return;
+      const c = cartera || { total_estrellas:0, total_usd:0 };
+
+      cont.innerHTML = `
+        <div style="padding:24px;border-radius:20px;background:linear-gradient(135deg,#0d0d0d,#1a0800);border:1px solid rgba(212,175,55,0.3);margin-bottom:20px">
+          <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);margin-bottom:8px">Cartera AURA</div>
+          <div style="font-family:'Cinzel',serif;font-size:40px;font-weight:900;color:var(--gold)">${(c.total_estrellas||0).toLocaleString()} ⭐</div>
+          <div style="font-size:14px;color:#22c55e;margin-top:6px;font-weight:700">≈ $${(c.total_usd||0).toFixed(2)} USD</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:4px">200★ = $1.00 USD</div>
+        </div>
+
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card"><div class="stat-label">⭐ En cartera</div><div class="stat-value" style="color:var(--gold)">${(c.total_estrellas||0).toLocaleString()}</div></div>
+          <div class="stat-card"><div class="stat-label">💵 En USD</div><div class="stat-value" style="color:#22c55e">$${(c.total_usd||0).toFixed(0)}</div></div>
+        </div>
+
+        <!-- RETIROS PENDIENTES -->
+        <div class="section-title" style="margin-bottom:10px">💳 Retiros pendientes de pagar</div>
+        <div id="masterCarteraRetiros">
+          <div style="text-align:center;padding:20px;color:var(--mu)">Cargando...</div>
+        </div>
+
+        <!-- DISTRIBUCIÓN MANUAL -->
+        <div class="card" style="margin-top:16px">
+          <div class="section-title" style="margin-bottom:14px">💸 Pago manual a streamer</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="input-group">
+              <span class="input-icon">👤</span>
+              <input type="text" id="pagoEmail" placeholder="Email de la streamer">
+            </div>
+            <div class="input-group">
+              <span class="input-icon">⭐</span>
+              <input type="number" id="pagoMonto" placeholder="Monto en estrellas">
+            </div>
+            <div class="input-group">
+              <span class="input-icon">📝</span>
+              <input type="text" id="pagoConcepto" placeholder="Concepto (ej: Bono semanal)">
+            </div>
+            <button onclick="masterPagoManual()" class="btn-primary" style="padding:14px">💸 Enviar pago</button>
+          </div>
+        </div>
+      `;
+
+      // Cargar retiros
+      window.fsGetAll?.('retiros').then(retiros => {
+        const cont2 = document.getElementById('masterCarteraRetiros');
+        if (!cont2) return;
+        const pendientes = retiros?.filter(r=>r.estado==='pendiente') || [];
+        if (pendientes.length === 0) {
+          cont2.innerHTML = `<div class="card" style="text-align:center;padding:16px;color:var(--mu)">No hay retiros pendientes.</div>`;
+          return;
+        }
+        cont2.innerHTML = pendientes.map(r=>`
+          <div class="card" style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+              <div>
+                <div style="font-weight:700">@${r.nick||'—'}</div>
+                <div style="font-size:12px;color:var(--mu)">${r.metodo} · ${r.cuenta||'—'}</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-family:'Cinzel',serif;font-size:18px;font-weight:700;color:var(--gold)">${r.monto_usd?'$'+r.monto_usd+' USD':r.monto+'★'}</div>
+                <div style="font-size:10px;color:var(--mu)">${r.createdAt?.toDate?.()?.toLocaleDateString?.() || 'Reciente'}</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button onclick="masterPagarRetiro('${r.id}')" class="btn-sm green" style="flex:1;padding:10px">✓ Marcar pagado</button>
+              <button onclick="masterRechazarRetiro('${r.id}')" class="btn-sm danger" style="flex:1;padding:10px">✕ Rechazar</button>
+            </div>
+          </div>
+        `).join('');
+      }).catch(()=>{});
+
+      window.masterPagoManual = function() {
+        const email = document.getElementById('pagoEmail')?.value?.trim();
+        const monto = parseInt(document.getElementById('pagoMonto')?.value);
+        const concepto = document.getElementById('pagoConcepto')?.value?.trim();
+        if (!email || !monto) { toast('Completa email y monto','error'); return; }
+        cargarUsuariosReales?.().then(usuarios => {
+          const s = usuarios.find(u=>u.email===email);
+          if (!s) { toast('Streamer no encontrada','error'); return; }
+          window.fsGet?.('usuarios',s.id).then(perfil=>{
+            window.fsSet?.('usuarios',s.id,{estrellas:(perfil?.estrellas||0)+monto}).then(()=>{
+              window.fsAdd?.('logs_master',{accion:`Pago manual a @${s.nick}: +${monto}⭐ · ${concepto}`,uid_master:p.uid,tipo:'pago'});
+              toast(`✅ +${monto}⭐ enviados a @${s.nick}`,'success');
+              renderCarteraTab();
+            });
+          });
+        });
+      };
+
+      window.masterPagarRetiro = function(id) {
+        window.fsSet?.('retiros',id,{estado:'pagado'}).then(()=>{
+          window.fsAdd?.('logs_master',{accion:'Retiro pagado',uid_master:p.uid,tipo:'retiro'});
+          toast('Retiro marcado como pagado ✓','success');
+          renderCarteraTab();
+        });
+      };
+      window.masterRechazarRetiro = function(id) {
+        window.fsSet?.('retiros',id,{estado:'rechazado'}).then(()=>{
+          toast('Retiro rechazado','info');
+          renderCarteraTab();
+        });
+      };
+    }).catch(()=>{});
+  }
+
+  // Cargar tab inicial
+  renderTarifasTab();
 }
 
 // ── METAS SEMANALES ───────────────────────
