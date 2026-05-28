@@ -84,6 +84,7 @@ window.renderSidebar = function(perfil) {
       { icon:'💳', label:'Tarifas & Precios', page:'tarifas' },
       { icon:'🎯', label:'Metas Semanales', page:'metas' },
       { icon:'📊', label:'Contabilidad', page:'reportes' },
+      { icon:'🔍', label:'Estado Sistema', page:'sistema' },
     ],
         admin: [
       { sec: 'ADMINISTRACIÓN' },
