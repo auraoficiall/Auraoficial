@@ -16,6 +16,7 @@ window.render_master = function(page, el, perfil) {
     usuarios:'streamers',
     tarifas:'tarifas', precios:'tarifas',
     metas:'metas', objetivos:'metas',
+    reportes:'reportes', contabilidad:'reportes', finanzas_rep:'reportes',
   };
   const target = pages[page] || 'global';
   switch(target) {
@@ -33,6 +34,7 @@ window.render_master = function(page, el, perfil) {
     case 'realtime':  return master_realtime(el, perfil);
     case 'tarifas':   return master_tarifas(el, perfil);
     case 'metas':     return master_metas(el, perfil);
+    case 'reportes':  return window.render_master_reportes(el, perfil);
     default:          return master_global(el, perfil);
   }
 };
