@@ -14,6 +14,8 @@ window.render_master = function(page, el, perfil) {
     tickets:'tickets', soporte:'tickets',
     realtime:'realtime', actividad:'realtime',
     usuarios:'streamers',
+    tarifas:'tarifas', precios:'tarifas',
+    metas:'metas', objetivos:'metas',
   };
   const target = pages[page] || 'global';
   switch(target) {
@@ -29,6 +31,8 @@ window.render_master = function(page, el, perfil) {
     case 'control':   return master_control(el, perfil);
     case 'tickets':   return master_tickets(el, perfil);
     case 'realtime':  return master_realtime(el, perfil);
+    case 'tarifas':   return master_tarifas(el, perfil);
+    case 'metas':     return master_metas(el, perfil);
     default:          return master_global(el, perfil);
   }
 };
@@ -96,32 +100,103 @@ function master_economy(el, p) {
   el.innerHTML = `
     <div class="dash-welcome aura-fade-up">
       <h1>💰 Economía <span>Total</span></h1>
-      <p>Flujo financiero · ingresos, payouts y reservas</p>
+      <p>Flujo real de estrellas en la plataforma</p>
     </div>
-    <div style="padding:24px;border-radius:20px;background:linear-gradient(135deg,#0d0d0d,#1a0800);border:1px solid rgba(212,175,55,0.3);margin-bottom:20px">
-      <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);margin-bottom:8px">Ingresos plataforma</div>
+    <div id="masterEconHero" style="padding:24px;border-radius:20px;background:linear-gradient(135deg,#0d0d0d,#1a0800);border:1px solid rgba(212,175,55,0.3);margin-bottom:20px">
+      <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);margin-bottom:8px">Estrellas totales en circulación</div>
       <div id="masterEconBalance" style="font-family:'Cinzel',serif;font-size:40px;font-weight:900;color:var(--gold)">Cargando...</div>
     </div>
-    <div id="masterEconContent"></div>
+    <div id="masterEconContent"><div style="text-align:center;padding:20px;color:var(--mu)">Cargando economía...</div></div>
   `;
 
-  cargarStatsReales().then(stats => {
-    document.getElementById('masterEconBalance').textContent = `${stats.usuarios} usuarios registrados`;
-    document.getElementById('masterEconContent').innerHTML = `
+  window.cargarEstadisticasEconomia?.().then(eco => {
+    const bal = document.getElementById('masterEconBalance');
+    const cont = document.getElementById('masterEconContent');
+    if (bal) bal.textContent = (eco.totalEstrellas||0).toLocaleString() + ' ⭐';
+    if (!cont) return;
+    cont.innerHTML = `
       <div class="stats-grid">
-        ${mStatCard('👥 Usuarios', stats.usuarios, '#60A5FA')}
-        ${mStatCard('🎤 Streamers', stats.streamers, '#4ade80')}
-        ${mStatCard('🏢 Agencias', stats.agencias, '#A78BFA')}
-        ${mStatCard('⏳ Pendientes aprobación', stats.pendientes, '#FFA500')}
+        ${mStatCard('⭐ En streamers', eco.estrellasStreamers, 'var(--gold)')}
+        ${mStatCard('💎 En usuarios', eco.estrellasUsuarios, '#60A5FA')}
+        ${mStatCard('🔄 Transacciones', eco.transacciones, '#4ade80')}
+        ${mStatCard('📊 Volumen total', eco.volumen, '#A78BFA')}
       </div>
       ${mCard(`
-        <div class="section-title">📋 Retiros pendientes</div>
-        <div style="text-align:center;padding:20px;color:var(--mu);font-size:13px">
-          Los retiros aparecerán aquí cuando los streamers los soliciten
-        </div>
+        <div class="section-title" style="margin-bottom:12px">🏆 Top Streamers por estrellas</div>
+        ${eco.topStreamers.length === 0
+          ? '<div style="text-align:center;padding:20px;color:var(--mu)">No hay streamers registradas aún.</div>'
+          : eco.topStreamers.map((s,i)=>`
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+              <div style="font-family:'Cinzel',serif;font-weight:700;color:var(--gold);width:24px">#${i+1}</div>
+              <div class="card-avatar" style="width:36px;height:36px;font-size:14px">${(s.nick||s.nombre||'?')[0].toUpperCase()}</div>
+              <div style="flex:1">
+                <div style="font-weight:600">@${s.nick||s.nombre}</div>
+                <div style="font-size:11px;color:var(--mu)">${s.pais||'—'}</div>
+              </div>
+              <div style="font-weight:700;color:var(--gold)">${(s.estrellas||0).toLocaleString()} ⭐</div>
+            </div>
+          `).join('')
+        }
+      `)}
+      ${mCard(`
+        <div class="section-title" style="margin-bottom:12px">💎 Top Usuarios por gifts enviados</div>
+        ${eco.topUsuarios.length === 0
+          ? '<div style="text-align:center;padding:20px;color:var(--mu)">No hay usuarios con actividad aún.</div>'
+          : eco.topUsuarios.map((u,i)=>`
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+              <div style="font-family:'Cinzel',serif;font-weight:700;color:#60A5FA;width:24px">#${i+1}</div>
+              <div class="card-avatar" style="width:36px;height:36px;font-size:14px">${(u.nick||u.nombre||'?')[0].toUpperCase()}</div>
+              <div style="flex:1">
+                <div style="font-weight:600">@${u.nick||u.nombre}</div>
+              </div>
+              <div style="font-weight:700;color:#60A5FA">${u.gifts_enviados||0} gifts</div>
+            </div>
+          `).join('')
+        }
+      `)}
+      ${mCard(`
+        <div class="section-title" style="margin-bottom:12px">💳 Retiros pendientes</div>
+        <div id="masterRetirosList"><div style="text-align:center;padding:20px;color:var(--mu)">Cargando...</div></div>
       `)}
     `;
+    // Cargar retiros
+    window.fsGetAll?.('retiros').then(retiros => {
+      const cont2 = document.getElementById('masterRetirosList');
+      if (!cont2) return;
+      const pendientes = retiros?.filter(r => r.estado === 'pendiente') || [];
+      if (pendientes.length === 0) {
+        cont2.innerHTML = '<div style="text-align:center;padding:16px;color:var(--mu);font-size:13px">No hay retiros pendientes.</div>';
+        return;
+      }
+      cont2.innerHTML = pendientes.map(r=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div style="flex:1">
+            <div style="font-weight:600">@${r.nick||'—'} · ${r.monto_usd?'$'+r.monto_usd+' USD':r.monto+'★'}</div>
+            <div style="font-size:11px;color:var(--mu)">${r.metodo} · ${r.cuenta||'—'}</div>
+          </div>
+          <button onclick="masterPagarRetiro('${r.id}')" class="btn-sm green" style="padding:6px 12px;font-size:11px">✓ Pagar</button>
+          <button onclick="masterRechazarRetiro('${r.id}')" class="btn-sm danger" style="padding:6px 12px;font-size:11px">✕</button>
+        </div>
+      `).join('');
+    }).catch(()=>{});
+  }).catch(()=>{
+    const cont = document.getElementById('masterEconContent');
+    if (cont) cont.innerHTML = '<div class="card" style="text-align:center;padding:20px;color:var(--mu)">Error cargando economía.</div>';
   });
+
+  window.masterPagarRetiro = function(id) {
+    window.fsSet?.('retiros', id, { estado: 'pagado' }).then(()=>{
+      window.fsAdd?.('logs_master', { accion:'Retiro pagado', uid_master:p.uid, tipo:'retiro' });
+      toast('Retiro marcado como pagado ✓','success');
+      navigate('finanzas');
+    });
+  };
+  window.masterRechazarRetiro = function(id) {
+    window.fsSet?.('retiros', id, { estado: 'rechazado' }).then(()=>{
+      toast('Retiro rechazado','info');
+      navigate('finanzas');
+    });
+  };
 }
 
 // ── 3. LIVES & SALAS ─────────────────────
@@ -606,4 +681,241 @@ function master_realtime(el, p) {
     });
   };
   window.master_realtime_reload();
+}
+
+// ── TARIFAS (Master configura precios) ───
+function master_tarifas(el, p) {
+  el.innerHTML = `
+    <div class="dash-welcome aura-fade-up">
+      <h1>💰 <span>Tarifas</span></h1>
+      <p>Configura los precios de la plataforma</p>
+    </div>
+    <div id="masterTarifasContent">
+      <div style="text-align:center;padding:20px;color:var(--mu)">Cargando tarifas...</div>
+    </div>
+  `;
+
+  // Cargar tarifas actuales
+  window.fsGet?.('config_plataforma', 'tarifas').then(t => {
+    const tarifas = t || {};
+    const cont = document.getElementById('masterTarifasContent');
+    if (!cont) return;
+
+    cont.innerHTML = `
+      <div class="card" style="margin-bottom:16px">
+        <div class="section-title" style="margin-bottom:4px">💬 Mensajes y llamadas</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Costo en estrellas para el usuario</div>
+        ${[
+          {key:'mensaje', label:'💬 Mensaje privado', default:2},
+          {key:'llamada', label:'📞 Llamada (por min)', default:6},
+          {key:'videollamada', label:'📹 Videollamada (por min)', default:10},
+          {key:'match', label:'⚡ Match (30 seg)', default:5},
+        ].map(item=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="font-size:13px">${item.label}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="tarifa_${item.key}" value="${tarifas[item.key]||item.default}" min="1"
+                style="width:64px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
+              <span style="color:var(--gold);font-size:13px;font-weight:700">⭐</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="section-title" style="margin-bottom:4px">🖼️ Contenido premium</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Precios de contenido exclusivo</div>
+        ${[
+          {key:'foto', label:'🖼️ Foto premium', default:15},
+          {key:'video_premium', label:'🎬 Video premium', default:30},
+          {key:'audio', label:'🎙️ Audio privado', default:3},
+        ].map(item=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="font-size:13px">${item.label}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="tarifa_${item.key}" value="${tarifas[item.key]||item.default}" min="1"
+                style="width:64px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
+              <span style="color:var(--gold);font-size:13px;font-weight:700">⭐</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="section-title" style="margin-bottom:4px">💎 Comisiones</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:14px">Porcentaje de ganancias</div>
+        ${[
+          {key:'comision_streamer', label:'🎤 Streamer recibe', default:85},
+          {key:'comision_agencia', label:'🏢 Agencia recibe', default:15},
+        ].map(item=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="font-size:13px">${item.label}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="tarifa_${item.key}" value="${tarifas[item.key]||item.default}" min="1" max="100"
+                style="width:64px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:13px;text-align:center">
+              <span style="color:var(--gold);font-size:13px;font-weight:700">%</span>
+            </div>
+          </div>
+        `).join('')}
+        <div style="font-size:11px;color:var(--mu);margin-top:10px;padding:10px;background:rgba(212,175,55,0.05);border-radius:8px">
+          ⚠️ La suma de Streamer + Agencia debe ser 100%
+        </div>
+      </div>
+
+      <button onclick="masterGuardarTarifas()" class="btn-primary" style="width:100%;padding:16px">
+        💾 Guardar tarifas en toda la plataforma
+      </button>
+    `;
+
+    window.masterGuardarTarifas = function() {
+      const get = id => parseInt(document.getElementById(id)?.value) || 0;
+      const nuevasTarifas = {
+        mensaje: get('tarifa_mensaje'),
+        llamada: get('tarifa_llamada'),
+        videollamada: get('tarifa_videollamada'),
+        match: get('tarifa_match'),
+        foto: get('tarifa_foto'),
+        video_premium: get('tarifa_video_premium'),
+        audio: get('tarifa_audio'),
+        comision_streamer: get('tarifa_comision_streamer'),
+        comision_agencia: get('tarifa_comision_agencia'),
+      };
+      window.fsSet?.('config_plataforma', 'tarifas', nuevasTarifas).then(()=>{
+        window.fsAdd?.('logs_master', {
+          accion: 'Tarifas actualizadas',
+          uid_master: p.uid, tipo: 'config'
+        });
+        toast('✅ Tarifas actualizadas en toda la plataforma','success');
+      }).catch(()=>toast('Error al guardar','error'));
+    };
+  }).catch(()=>{
+    const cont = document.getElementById('masterTarifasContent');
+    if (cont) cont.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mu)">Error cargando tarifas.</div>`;
+  });
+}
+
+// ── METAS SEMANALES ───────────────────────
+function master_metas(el, p) {
+  const ahora = new Date();
+  const diasParaLunes = (8 - ahora.getDay()) % 7 || 7;
+  const proximoLunes = new Date(ahora);
+  proximoLunes.setDate(ahora.getDate() + diasParaLunes);
+  proximoLunes.setHours(0,0,0,0);
+
+  el.innerHTML = `
+    <div class="dash-welcome aura-fade-up">
+      <h1>🎯 Metas <span>Semanales</span></h1>
+      <p>Se reinician automáticamente cada lunes</p>
+    </div>
+    <div style="padding:12px 16px;background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.2);border-radius:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;color:var(--mu)">Próximo reinicio</div>
+      <div style="font-size:13px;font-weight:700;color:var(--gold)">${proximoLunes.toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long'})}</div>
+    </div>
+
+    <!-- CREAR META -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:14px">+ Nueva meta semanal</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="input-group">
+          <span class="input-icon">🎯</span>
+          <input type="text" id="metaTitulo" placeholder="Título (ej: Llegar a 10,000 estrellas)">
+        </div>
+        <div class="input-group">
+          <span class="input-icon">📝</span>
+          <input type="text" id="metaDesc" placeholder="Descripción para streamers">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="input-group">
+            <span class="input-icon">🎁</span>
+            <input type="number" id="metaValor" placeholder="Valor objetivo">
+          </div>
+          <select id="metaTipo" style="background:var(--black3);border:1px solid var(--border2);color:var(--white);border-radius:var(--r-lg);padding:0 12px;font-size:13px">
+            <option value="estrellas">⭐ Estrellas</option>
+            <option value="seguidores">👥 Nuevos fans</option>
+            <option value="lives">📺 Horas en live</option>
+            <option value="matches">⚡ Matches</option>
+            <option value="gifts">🎁 Gifts recibidos</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <span class="input-icon">🏆</span>
+          <input type="text" id="metaRecompensa" placeholder="Recompensa (ej: +500 estrellas bonus)">
+        </div>
+        <button onclick="masterCrearMeta()" class="btn-primary" style="padding:14px">🎯 Crear meta semanal</button>
+      </div>
+    </div>
+
+    <!-- METAS ACTIVAS -->
+    <div class="section-title" style="margin-bottom:10px">📋 Metas activas esta semana</div>
+    <div id="masterMetasContent">
+      <div style="text-align:center;padding:20px;color:var(--mu)">Cargando metas...</div>
+    </div>
+  `;
+
+  window.masterCrearMeta = function() {
+    const titulo = document.getElementById('metaTitulo')?.value?.trim();
+    const desc = document.getElementById('metaDesc')?.value?.trim();
+    const valor = parseInt(document.getElementById('metaValor')?.value);
+    const tipo = document.getElementById('metaTipo')?.value;
+    const recompensa = document.getElementById('metaRecompensa')?.value?.trim();
+    if (!titulo || !valor) { toast('Completa título y valor objetivo','error'); return; }
+
+    window.fsAdd?.('metas_semanales', {
+      titulo, descripcion: desc, valor_objetivo: valor,
+      tipo, recompensa, estado: 'activa',
+      semana: proximoLunes.toISOString(),
+      uid_master: p.uid,
+      para: 'streamers' // metas son para streamers
+    }).then(()=>{
+      document.getElementById('metaTitulo').value = '';
+      document.getElementById('metaDesc').value = '';
+      document.getElementById('metaValor').value = '';
+      document.getElementById('metaRecompensa').value = '';
+      toast('Meta semanal creada ✓','success');
+      masterCargarMetas();
+    }).catch(()=>toast('Error al crear meta','error'));
+  };
+
+  function masterCargarMetas() {
+    if (!document.getElementById('masterMetasContent')) return;
+    window.fsGetAll?.('metas_semanales').then(metas => {
+      const cont = document.getElementById('masterMetasContent');
+      if (!cont) return;
+      const activas = metas?.filter(m => m.estado === 'activa') || [];
+      if (activas.length === 0) {
+        cont.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mu)">
+          No hay metas esta semana. Crea la primera arriba.
+        </div>`;
+        return;
+      }
+      cont.innerHTML = activas.map(m=>`
+        <div class="card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:start;justify-content:space-between;margin-bottom:10px">
+            <div>
+              <div style="font-weight:700;font-size:14px">${m.titulo}</div>
+              <div style="font-size:11px;color:var(--mu);margin-top:3px">${m.descripcion||''}</div>
+            </div>
+            <button onclick="masterDesactivarMeta('${m.id}')" style="background:none;border:none;color:rgba(239,68,68,0.6);cursor:pointer;font-size:16px;padding:0">✕</button>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+            <span style="color:var(--gold)">🎯 ${m.valor_objetivo?.toLocaleString()} ${m.tipo}</span>
+            <span style="color:#22c55e">🏆 ${m.recompensa||'Sin recompensa'}</span>
+            <span class="badge badge-green">Activa</span>
+          </div>
+        </div>
+      `).join('');
+    }).catch(()=>{
+      const cont = document.getElementById('masterMetasContent');
+      if (cont) cont.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mu)">No hay metas aún.</div>`;
+    });
+  }
+
+  window.masterDesactivarMeta = function(id) {
+    window.fsSet?.('metas_semanales', id, { estado: 'inactiva' }).then(()=>{
+      toast('Meta desactivada ✓','success');
+      masterCargarMetas();
+    });
+  };
+
+  masterCargarMetas();
 }

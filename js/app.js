@@ -80,6 +80,9 @@ window.renderSidebar = function(perfil) {
       { icon:'🔒', label:'Control Plataforma', page:'config' },
       { icon:'💬', label:'Tickets Críticos', page:'tickets' },
       { icon:'📡', label:'Actividad Realtime', page:'actividad' },
+      { sec: 'CONFIGURACIÓN' },
+      { icon:'💳', label:'Tarifas & Precios', page:'tarifas' },
+      { icon:'🎯', label:'Metas Semanales', page:'metas' },
     ],
         admin: [
       { sec: 'ADMINISTRACIÓN' },
