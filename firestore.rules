@@ -1,0 +1,91 @@
+// PEGA ESTO EN:
+// Firebase Console → Firestore → Reglas
+// Luego click "Publicar"
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Colección usuarios ──────────────────────────────
+    match /usuarios/{uid} {
+
+      // Cualquier usuario autenticado puede leer su propio perfil
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Master puede leer TODOS los perfiles
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'master';
+
+      // Admin puede leer todos los perfiles
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
+
+      // Moderador puede leer todos los perfiles
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'moderador';
+
+      // Agencia puede leer perfiles de sus streamers
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'agencia';
+
+      // Crear perfil: solo el propio usuario puede crear su documento
+      allow create: if request.auth != null && request.auth.uid == uid;
+
+      // Actualizar: solo el propio usuario puede editar su perfil
+      // EXCEPTO el campo "rol" y "estado" que solo Master/Admin pueden cambiar
+      allow update: if request.auth != null && request.auth.uid == uid &&
+        !('rol' in request.resource.data.diff(resource.data).affectedKeys()) &&
+        !('estado' in request.resource.data.diff(resource.data).affectedKeys());
+
+      // Master y Admin pueden actualizar cualquier campo de cualquier usuario
+      allow update: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin'];
+
+      // Solo Master puede eliminar usuarios
+      allow delete: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'master';
+    }
+
+    // ── Colección lives ─────────────────────────────────
+    match /lives/{liveId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['streamer', 'master', 'admin'];
+      allow update: if request.auth != null &&
+        (resource.data.streamerId == request.auth.uid ||
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin', 'moderador']);
+      allow delete: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin', 'moderador'];
+    }
+
+    // ── Colección transacciones ──────────────────────────
+    match /transacciones/{txId} {
+      allow read: if request.auth != null &&
+        (resource.data.uid == request.auth.uid ||
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin']);
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin'];
+    }
+
+    // ── Colección reportes ───────────────────────────────
+    match /reportes/{reporteId} {
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin', 'moderador'];
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin', 'moderador'];
+    }
+
+    // ── Colección mensajes ───────────────────────────────
+    match /mensajes/{msgId} {
+      allow read: if request.auth != null &&
+        (resource.data.de == request.auth.uid || resource.data.para == request.auth.uid ||
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin', 'moderador']);
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['master', 'admin', 'moderador'];
+    }
+
+  }
+}
