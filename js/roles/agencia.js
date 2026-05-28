@@ -46,6 +46,14 @@ function ag_dashboard(el, p) {
     if (!cont) return;
     cont.innerHTML = `
       ${agCard(`
+        <div class="section-title" style="margin-bottom:12px">🔗 Link de invitación</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Comparte este link con tus streamers para que se registren directamente en tu agencia</div>
+        <button onclick="agGenerarLink()" style="width:100%;padding:12px;border-radius:10px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);color:var(--gold);font-weight:700;font-size:13px;cursor:pointer">
+          🔗 Generar mi link de invitación
+        </button>
+        <div id="agLinkInvitacion"></div>
+      `)}
+      ${agCard(`
         <div class="section-title">⚡ Acciones rápidas</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
           ${[

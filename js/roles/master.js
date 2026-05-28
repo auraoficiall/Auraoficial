@@ -551,51 +551,107 @@ function master_alerts(el, p) {
 
 // ── 10. CONTROL PLATAFORMA ───────────────
 function master_control(el, p) {
+  // Switches con estado real: true = activado/permitido, false = bloqueado
   const switches = [
-    {key:'mantenimiento',label:'Modo mantenimiento',desc:'Cierra el acceso a toda la plataforma'},
-    {key:'registros',label:'Permitir registros',desc:'Bloquea altas de nuevos usuarios'},
-    {key:'lives',label:'Permitir lives',desc:'Detiene todas las transmisiones'},
-    {key:'payouts',label:'Procesar payouts',desc:'Pausa los retiros de dinero'},
-    {key:'stars',label:'Recargas de estrellas',desc:'Bloquea compras de estrellas'},
-    {key:'chat',label:'Chat global',desc:'Silencia el chat de toda la app'},
+    {key:'mantenimiento', label:'Modo mantenimiento', desc:'Enciende = plataforma cerrada para todos', invertido:true},
+    {key:'registros',     label:'Permitir registros', desc:'Enciende = nuevos usuarios pueden registrarse', invertido:false},
+    {key:'lives',         label:'Permitir lives',     desc:'Enciende = streamers pueden transmitir', invertido:false},
+    {key:'payouts',       label:'Procesar payouts',   desc:'Enciende = retiros de dinero activos', invertido:false},
+    {key:'stars',         label:'Recargas de estrellas', desc:'Enciende = usuarios pueden comprar estrellas', invertido:false},
+    {key:'chat',          label:'Chat global',        desc:'Enciende = chat disponible en toda la app', invertido:false},
+    {key:'match',         label:'Sistema Match',      desc:'Enciende = videollamadas de match activas', invertido:false},
+    {key:'pk_battle',     label:'PK Battles',         desc:'Enciende = batallas en vivo activas', invertido:false},
   ];
 
   el.innerHTML = `
     <div class="dash-welcome aura-fade-up">
       <h1>🔒 Control <span>Plataforma</span></h1>
-      <p>Switches operativos · Acción inmediata y guardada en Firebase</p>
+      <p>Estado real guardado en Firebase · Se aplica a todos los usuarios</p>
     </div>
-    ${mCard(switches.map((s,i) => `
-      <div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border2);margin-bottom:10px">
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:600">${s.label}</div>
-          <div style="font-size:11px;color:var(--mu);margin-top:2px">${s.desc}</div>
-        </div>
-        <button onclick="masterControlSwitch('${s.key}',this)" id="sw_${s.key}"
-          style="padding:8px 16px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border2);background:rgba(255,255,255,0.05);color:var(--mu);transition:all .2s">
-          OFF
-        </button>
-      </div>
-    `).join(''))}
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px">
-      <button onclick="masterControl('workers')" class="btn-sm" style="padding:12px">🔄 Reiniciar workers</button>
-      <button onclick="masterControl('cache')" class="btn-sm" style="padding:12px">🧹 Purgar caché</button>
-      <button onclick="masterControl('deploy')" class="btn-sm" style="padding:12px">📤 Forzar deploy</button>
-      <button onclick="if(confirm('⚠️ ¿Activar Kill Switch? Cerrará toda la plataforma.'))masterControl('killswitch')"
-        style="padding:12px;border-radius:var(--r-lg);background:var(--grad-main);border:none;color:#fff;font-weight:700;font-size:12px;cursor:pointer">
-        🚨 Kill switch global
-      </button>
+    <div id="masterControlContent">
+      <div style="text-align:center;padding:30px;color:var(--mu)">Cargando estado del sistema...</div>
     </div>
   `;
 
-  window.masterControlSwitch = function(key, btn) {
-    const isOn = btn.textContent === 'ON';
-    btn.textContent = isOn ? 'OFF' : 'ON';
-    btn.style.background = isOn ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,var(--gold3),var(--gold))';
-    btn.style.color = isOn ? 'var(--mu)' : 'var(--black)';
-    btn.style.borderColor = isOn ? 'var(--border2)' : 'var(--gold-brd)';
-    masterControl(key);
-  };
+  // Cargar estado REAL desde Firestore
+  window.fsGet?.('config_plataforma', 'global').then(cfg => {
+    const estado = cfg || {};
+    const cont = document.getElementById('masterControlContent');
+    if (!cont) return;
+
+    cont.innerHTML = `
+      ${mCard(`
+        <div class="section-title" style="margin-bottom:14px">⚡ Switches del sistema</div>
+        ${switches.map(s => {
+          // Si es invertido (mantenimiento), true = bloqueado, false = activo
+          // Si es normal, true = activo, false = bloqueado
+          const valorDB = estado[s.key];
+          let activo;
+          if (s.invertido) {
+            activo = !valorDB; // mantenimiento true = bloqueado, así que switch OFF
+          } else {
+            // Para los normales: si no está en DB o es null/undefined = activo por defecto
+            activo = valorDB === undefined || valorDB === null || valorDB === true || valorDB === false ? (valorDB !== false) : true;
+          }
+
+          return `
+            <div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid ${activo?'rgba(34,197,94,0.2)':'rgba(204,0,0,0.2)'};margin-bottom:8px;transition:all .3s">
+              <div style="width:10px;height:10px;border-radius:50%;background:${activo?'#22c55e':'#EF4444'};box-shadow:0 0 8px ${activo?'rgba(34,197,94,0.6)':'rgba(239,68,68,0.6)'};flex-shrink:0"></div>
+              <div style="flex:1">
+                <div style="font-size:14px;font-weight:600;color:#fff">${s.label}</div>
+                <div style="font-size:11px;color:var(--mu);margin-top:2px">${s.desc}</div>
+                <div style="font-size:10px;margin-top:3px;color:${activo?'#22c55e':'#EF4444'};font-weight:700">${activo?'✅ ACTIVO':'❌ BLOQUEADO'}</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer">
+                <input type="checkbox" ${activo?'checked':''} onchange="masterControlToggle('${s.key}',this.checked,${s.invertido})"
+                  style="opacity:0;width:0;height:0;position:absolute">
+                <span style="position:absolute;inset:0;border-radius:999px;background:${activo?'linear-gradient(135deg,#22c55e,#16a34a)':'rgba(255,255,255,0.1)'};transition:all .3s;border:1px solid ${activo?'#22c55e':'rgba(255,255,255,0.15)'}">
+                  <span style="position:absolute;width:22px;height:22px;border-radius:50%;background:#fff;top:2px;left:${activo?'26px':'2px'};transition:left .3s;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></span>
+                </span>
+              </label>
+            </div>
+          `;
+        }).join('')}
+      `)}
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:4px">
+        <button onclick="masterControl('workers')" class="btn-sm" style="padding:12px;display:flex;align-items:center;justify-content:center;gap:6px">🔄 Reiniciar workers</button>
+        <button onclick="masterControl('cache')" class="btn-sm" style="padding:12px;display:flex;align-items:center;justify-content:center;gap:6px">🧹 Purgar caché CDN</button>
+        <button onclick="navigate('control')" class="btn-sm" style="padding:12px;display:flex;align-items:center;justify-content:center;gap:6px">🔄 Actualizar estado</button>
+        <button onclick="if(confirm('⚠️ ¿KILL SWITCH? Cerrará TODA la plataforma ahora mismo.'))masterControl('killswitch')"
+          style="padding:12px;border-radius:var(--r-lg);background:var(--grad-main);border:none;color:#fff;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+          🚨 Kill Switch Global
+        </button>
+      </div>
+    `;
+
+    // Toggle real con Firestore
+    window.masterControlToggle = async function(key, checked, invertido) {
+      // Si invertido (mantenimiento): checked=true (switch ON) significa activo=true = bloqueado
+      // Si normal: checked=true = activo = true en DB
+      const valorAGuardar = invertido ? checked : checked;
+
+      try {
+        await window.fsSet('config_plataforma', 'global', { [key]: valorAGuardar });
+        await window.fsAdd('logs_master', {
+          accion: `Switch ${key}: ${checked?'ACTIVADO':'DESACTIVADO'}`,
+          uid_master: p.uid, tipo: 'control'
+        });
+        const label = switches.find(s=>s.key===key)?.label || key;
+        toast(`${checked?'✅':'❌'} ${label} ${checked?'activado':'desactivado'}`, checked?'success':'info');
+        // Recargar para mostrar estado actualizado
+        setTimeout(()=>navigate('control'), 500);
+      } catch(e) {
+        toast('Error guardando: ' + e.message, 'error');
+      }
+    };
+  }).catch(err => {
+    const cont = document.getElementById('masterControlContent');
+    if (cont) cont.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:#EF4444">
+      Error cargando estado: ${err.message}<br>
+      <button onclick="navigate('control')" class="btn-sm" style="margin-top:10px;padding:10px 20px">Reintentar</button>
+    </div>`;
+  });
 }
 
 // ── 11. TICKETS ───────────────────────────

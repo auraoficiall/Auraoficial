@@ -1,3 +1,23 @@
+// js/app.js
+// Detectar link de invitación de agencia
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref');
+  const agencia = params.get('agencia');
+  if (ref) {
+    window._refAgenciaUid = ref;
+    window._refAgenciaNick = agencia ? decodeURIComponent(agencia) : null;
+    // Guardar en sessionStorage para que persista durante el registro
+    sessionStorage.setItem('aura_ref_uid', ref);
+    sessionStorage.setItem('aura_ref_nick', agencia ? decodeURIComponent(agencia) : '');
+    console.log('🔗 Link de invitación detectado · Agencia:', window._refAgenciaNick);
+  } else {
+    // Recuperar si ya estaba guardado
+    window._refAgenciaUid = sessionStorage.getItem('aura_ref_uid') || null;
+    window._refAgenciaNick = sessionStorage.getItem('aura_ref_nick') || null;
+  }
+})();
+
 // js/app.js — AURA Core App
 
 // ── INICIAR APP según rol ────────────────────────────────
