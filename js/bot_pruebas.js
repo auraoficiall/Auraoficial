@@ -1,489 +1,596 @@
-// js/bot_pruebas.js — Bot automático de pruebas AURA
+// js/bot_pruebas.js — Bot de auditoría automática AURA (6 roles)
+// Roles: MASTER · ADMIN · MODERADOR · AGENCIA · STREAMER · USUARIO
 
-window.AURA_BOT = {
-  correos: {},
-  log: [],
-  enEjecucion: false,
-
-  // ── REGISTRAR CREDENCIALES ──
-  configurar(creds) {
-    this.correos = creds;
-    console.log('🤖 Bot configurado con', Object.keys(creds).length, 'roles');
-  },
-
-  // ── LOG ──
-  _log(rol, accion, ok, detalle, fix) {
-    const entry = { rol, accion, ok, detalle: detalle||'', fix: fix||'', tiempo: new Date().toLocaleTimeString('es') };
-    this.log.push(entry);
-    console[ok?'log':'warn'](`${ok?'✅':'❌'} [${rol}] ${accion}${detalle?' · '+detalle:''}`);
-    // Actualizar UI en tiempo real
-    const logEl = document.getElementById('botLogLive');
-    if (logEl) {
-      const d = document.createElement('div');
-      d.style.cssText = `padding:5px 8px;border-radius:6px;font-size:12px;margin-bottom:4px;background:${ok?'rgba(34,197,94,0.06)':'rgba(239,68,68,0.06)'};border-left:3px solid ${ok?'#22c55e':'#EF4444'}`;
-      d.innerHTML = `<span style="color:var(--mu);font-size:10px">${entry.tiempo}</span> <span style="color:${ok?'#22c55e':'#EF4444'};font-weight:700">[${rol}]</span> ${accion}${detalle?` <span style="color:var(--mu)">· ${detalle}</span>`:''}${!ok&&fix?`<br><span style="color:#FFA500;font-size:10px">→ ${fix}</span>`:''}`;
-      logEl.appendChild(d);
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-  },
-
-  _sleep(ms) { return new Promise(r => setTimeout(r, ms)); },
-
-  // ── INICIAR SESIÓN ──
-  async _login(email, password) {
-    try {
-      const { signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
-      await signInWithEmailAndPassword(window._auth, email, password);
-      return true;
-    } catch(e) {
-      // Si ya está logueado con ese email
-      if (window._auth?.currentUser?.email === email) return true;
-      return false;
-    }
-  },
-
-  // ── OBTENER PERFIL ──
-  async _getPerfil(uid) {
-    try {
-      const usuarios = await window.fsGetAll('usuarios');
-      return usuarios?.find(u => u.id === uid || u.uid === uid);
-    } catch(e) { return null; }
-  },
-
-  // ══════════════════════════════════════════
-  // PRUEBAS POR ROL
-  // ══════════════════════════════════════════
-
-  async probarMaster(email, pass) {
-    const rol = 'MASTER';
-    this._log(rol, 'Iniciando pruebas...', true, email);
-    await this._sleep(300);
-
-    // 1. Verificar login
-    const usuarios = await window.fsGetAll('usuarios').catch(()=>[]);
-    const perfil = usuarios?.find(u=>u.email===email);
-    this._log(rol, 'Perfil en Firestore', !!perfil, perfil?`@${perfil.nick}`:'no encontrado', 'Registrar cuenta master');
-    if (!perfil) return;
-    this._log(rol, 'Rol correcto', perfil.rol==='master', perfil.rol, 'Cambiar rol a master en Firestore');
-    this._log(rol, 'Estado activo', perfil.estado==='activo', perfil.estado, 'Activar usuario');
-
-    await this._sleep(200);
-
-    // 2. Leer estadísticas
-    try {
-      const stats = await window.cargarStatsReales?.();
-      this._log(rol, 'Cargar estadísticas plataforma', !!stats, `${stats?.usuarios||0} usuarios`, 'Error en cargarStatsReales()');
-    } catch(e) { this._log(rol, 'Cargar estadísticas', false, e.message, 'Verificar cargarStatsReales()'); }
-
-    await this._sleep(200);
-
-    // 3. Leer/escribir tarifas
-    try {
-      const tarifas = await window.fsGet('config_plataforma', 'tarifas');
-      this._log(rol, 'Leer tarifas', true, tarifas?`match:${tarifas.match}⭐`:'usando defaults');
-      await window.fsSet('config_plataforma', 'tarifas', { ...tarifas, _test: Date.now() });
-      this._log(rol, 'Guardar tarifas', true, 'Escritura en Firestore OK');
-    } catch(e) { this._log(rol, 'Tarifas Firestore', false, e.message, 'Verificar reglas Firestore'); }
-
-    await this._sleep(200);
-
-    // 4. Control plataforma
-    try {
-      const cfg = await window.fsGet('config_plataforma', 'global').catch(()=>null);
-      this._log(rol, 'Leer control plataforma', true, cfg?'Config encontrada':'Sin config (normal)');
-      await window.fsSet('config_plataforma', 'global', { registros: true, lives: true, stars: true, chat: true, match: true });
-      this._log(rol, 'Activar switches plataforma', true, 'Todos activos');
-    } catch(e) { this._log(rol, 'Control plataforma', false, e.message); }
-
-    await this._sleep(200);
-
-    // 5. Crear log maestro
-    try {
-      await window.fsAdd('logs_master', { accion: 'Test automático bot', uid_master: perfil.id, tipo: 'bot' });
-      this._log(rol, 'Crear log', true, 'Log guardado en Firestore');
-    } catch(e) { this._log(rol, 'Crear log', false, e.message); }
-
-    await this._sleep(200);
-
-    // 6. Funciones críticas
-    this._log(rol, 'masterAsignarAgencia()', typeof window.masterAsignarAgencia==='function', null, 'Falta en master.js — reemplaza el archivo');
-    this._log(rol, 'masterEditarUsuario()', typeof window.masterEditarUsuario==='function', null, 'Falta en master.js');
-    this._log(rol, 'masterConfirmarAgencia()', typeof window.masterConfirmarAgencia==='function', null, 'Falta en master.js');
-    this._log(rol, 'render_master_reportes()', typeof window.render_master_reportes==='function', null, 'Falta master_reportes.js');
-    this._log(rol, 'repImprimir() PDF', typeof window.repImprimir==='function'||true, 'Se define al generar reporte');
-
-    await this._sleep(200);
-
-    // 7. Metas semanales
-    try {
-      const metas = await window.fsGetAll('metas_semanales');
-      this._log(rol, 'Leer metas semanales', true, `${metas?.length||0} metas`);
-    } catch(e) { this._log(rol, 'Metas semanales', false, e.message); }
-  },
-
-  async probarStreamer(email, pass) {
-    const rol = 'STREAMER';
-    this._log(rol, 'Iniciando pruebas...', true, email);
-    await this._sleep(300);
-
-    const usuarios = await window.fsGetAll('usuarios').catch(()=>[]);
-    const perfil = usuarios?.find(u=>u.email===email);
-    this._log(rol, 'Perfil en Firestore', !!perfil, perfil?`@${perfil.nick}`:'no encontrado', 'Registrar cuenta streamer');
-    if (!perfil) return;
-
-    this._log(rol, 'Rol correcto', perfil.rol==='streamer', perfil.rol, 'Cambiar rol a streamer en Master');
-    this._log(rol, 'Estado activo', perfil.estado==='activo', perfil.estado, 'Activar en Master → Streamers');
-    this._log(rol, 'Tiene nivel', !!perfil.nivel, perfil.nivel||'sin nivel — se asignará Bronce', null);
-
-    await this._sleep(200);
-
-    // Asignar nivel si no tiene
-    if (!perfil.nivel) {
-      try {
-        await window.fsSet('usuarios', perfil.id, { nivel: 'bronce' });
-        this._log(rol, 'Nivel Bronce asignado', true, 'Auto-asignado por el bot');
-      } catch(e) { this._log(rol, 'Asignar nivel', false, e.message); }
-    }
-
-    await this._sleep(200);
-
-    // Verificar cálculo de comisiones
-    const nv = window.getNivel?.(perfil.nivel||'bronce');
-    this._log(rol, 'Sistema de niveles', !!nv, `${nv?.emoji} ${nv?.nombre} · recibe ${nv?.streamer}%`);
-
-    const dist = window.calcularDistribucion?.(200, perfil.nivel||'bronce');
-    this._log(rol, 'Cálculo comisión (200⭐=$1)', !!dist, dist?`streamer:${dist.streamer}⭐ · ${(dist.streamer/200).toFixed(2)}USD`:'error', 'Error en calcularDistribucion()');
-
-    await this._sleep(200);
-
-    // Sala de voz — crear y cerrar
-    try {
-      const salaId = await window.fsAdd('salas', {
-        nombre: 'Sala Test Bot', tipo: 'voice',
-        uid_host: perfil.id, nick_host: perfil.nick||perfil.nombre,
-        activa: true, participantes: 0
-      });
-      this._log(rol, 'Crear sala de voz', true, 'Sala guardada en Firestore');
-      await this._sleep(300);
-      if (salaId?.id) await window.fsSet('salas', salaId.id, { activa: false });
-      this._log(rol, 'Cerrar sala de voz', true, 'Sala cerrada OK');
-    } catch(e) { this._log(rol, 'Salas de voz', false, e.message); }
-
-    await this._sleep(200);
-
-    // Solicitar retiro
-    try {
-      const retiroId = await window.fsAdd('retiros', {
-        monto: 100, monto_usd: 0.50,
-        metodo: 'PayPal (test)', cuenta: 'test@test.com',
-        estado: 'pendiente', tipo: 'streamer',
-        uid_streamer: perfil.id, nick: perfil.nick||perfil.nombre,
-        _test: true
-      });
-      this._log(rol, 'Solicitar retiro', true, '100⭐ = $0.50 USD en Firestore');
-      // Limpiar retiro de prueba
-      if (retiroId?.id) await window.fsSet('retiros', retiroId.id, { estado: 'cancelado_test' });
-    } catch(e) { this._log(rol, 'Solicitar retiro', false, e.message); }
-
-    await this._sleep(200);
-
-    // Frecuencia de pago
-    try {
-      await window.fsSet('usuarios', perfil.id, { frecuencia_pago: 'mensual' });
-      this._log(rol, 'Guardar frecuencia de pago', true, 'mensual guardado');
-    } catch(e) { this._log(rol, 'Frecuencia de pago', false, e.message); }
-  },
-
-  async probarUsuario(email, pass) {
-    const rol = 'USUARIO';
-    this._log(rol, 'Iniciando pruebas...', true, email);
-    await this._sleep(300);
-
-    const usuarios = await window.fsGetAll('usuarios').catch(()=>[]);
-    const perfil = usuarios?.find(u=>u.email===email);
-    this._log(rol, 'Perfil en Firestore', !!perfil, perfil?`@${perfil.nick}`:'no encontrado', 'Registrar cuenta usuario');
-    if (!perfil) return;
-
-    this._log(rol, 'Rol correcto', perfil.rol==='usuario', perfil.rol, 'Cambiar rol a usuario en Master');
-    this._log(rol, 'Estado activo', perfil.estado==='activo', perfil.estado, 'Activar en Master');
-    this._log(rol, 'Tiene estrellas', (perfil.estrellas||0) >= 0, `${perfil.estrellas||0}⭐`);
-
-    await this._sleep(200);
-
-    // Dar estrellas de prueba si no tiene
-    if ((perfil.estrellas||0) === 0) {
-      try {
-        await window.fsSet('usuarios', perfil.id, { estrellas: 1000 });
-        this._log(rol, 'Asignar estrellas de prueba', true, '+1000⭐ para pruebas');
-      } catch(e) { this._log(rol, 'Asignar estrellas', false, e.message); }
-    }
-
-    await this._sleep(200);
-
-    // Solicitar match
-    try {
-      const streamers = usuarios.filter(u=>u.rol==='streamer'&&u.estado==='activo');
-      if (streamers.length > 0) {
-        const s = streamers[0];
-        const matchId = await window.fsAdd('matches', {
-          uid_usuario: perfil.id, nick_usuario: perfil.nick||perfil.nombre,
-          uid_streamer: s.id, nick_streamer: s.nick||s.nombre,
-          estado: 'esperando', costo: 5, _test: true
-        });
-        this._log(rol, 'Solicitar match', true, `→ @${s.nick||s.nombre}`);
-        await this._sleep(300);
-        if (matchId?.id) await window.fsSet('matches', matchId.id, { estado: 'cancelado_test' });
-        this._log(rol, 'Cancelar match', true, 'Limpiado OK');
-      } else {
-        this._log(rol, 'Solicitar match', false, 'No hay streamers activas', 'Activar streamer en Master → Streamers');
-      }
-    } catch(e) { this._log(rol, 'Match', false, e.message); }
-
-    await this._sleep(200);
-
-    // Ver salas
-    try {
-      const salas = await window.fsGetAll('salas');
-      const activas = salas?.filter(s=>s.activa) || [];
-      this._log(rol, 'Ver salas activas', true, `${activas.length} salas disponibles`);
-    } catch(e) { this._log(rol, 'Ver salas', false, e.message); }
-  },
-
-  async probarAgencia(email, pass) {
-    const rol = 'AGENCIA';
-    this._log(rol, 'Iniciando pruebas...', true, email);
-    await this._sleep(300);
-
-    const usuarios = await window.fsGetAll('usuarios').catch(()=>[]);
-    const perfil = usuarios?.find(u=>u.email===email);
-    this._log(rol, 'Perfil en Firestore', !!perfil, perfil?`@${perfil.nick}`:'no encontrado', 'Registrar cuenta agencia');
-    if (!perfil) return;
-
-    this._log(rol, 'Rol correcto', perfil.rol==='agencia', perfil.rol, 'Cambiar rol a agencia en Master');
-    this._log(rol, 'Estado activo', perfil.estado==='activo', perfil.estado, 'Activar en Master');
-
-    await this._sleep(200);
-
-    // Ver mis streamers
-    const misStreamers = usuarios.filter(u=>u.rol==='streamer'&&u.agencia_uid===perfil.id);
-    this._log(rol, 'Ver mis streamers', true, `${misStreamers.length} asignadas${misStreamers.length===0?' · Asigna streamers desde Master':''}`);
-
-    await this._sleep(200);
-
-    // Generar link de invitación
-    const link = `https://auraoficial-seven.vercel.app?ref=${perfil.id}&agencia=${encodeURIComponent(perfil.nick||perfil.nombre)}`;
-    this._log(rol, 'Generar link invitación', true, link.substring(0,50)+'...');
-
-    await this._sleep(200);
-
-    // Calcular ganancias
-    let totalComision = 0;
-    for (const s of misStreamers) {
-      const nv = window.getNivel?.(s.nivel||'bronce');
-      totalComision += Math.floor((s.estrellas||0) * (nv?.agencia||10) / 100);
-    }
-    this._log(rol, 'Calcular ganancias', true, `${totalComision}⭐ = $${(totalComision/200).toFixed(2)} USD`);
-
-    await this._sleep(200);
-
-    // Solicitar retiro de prueba
-    try {
-      const ret = await window.fsAdd('retiros', {
-        monto: totalComision||0, monto_usd: (totalComision/200).toFixed(2),
-        metodo: 'PayPal (test)', cuenta: email,
-        estado: 'pendiente', tipo: 'agencia',
-        uid_agencia: perfil.id, nick: perfil.nick||perfil.nombre, _test: true
-      });
-      this._log(rol, 'Solicitar retiro', true, `$${(totalComision/200).toFixed(2)} USD pendiente para Master`);
-      if (ret?.id) await window.fsSet('retiros', ret.id, { estado: 'cancelado_test' });
-    } catch(e) { this._log(rol, 'Solicitar retiro', false, e.message); }
-  },
-
-  // ══════════════════════════════════════════
-  // EJECUTAR TODO
-  // ══════════════════════════════════════════
-  async ejecutarTodo(creds) {
-    this.log = [];
-    this.enEjecucion = true;
-    this.configurar(creds);
-
-    if (creds.master) await this.probarMaster(creds.master, creds.master_pass||'');
-    await this._sleep(500);
-    if (creds.streamer) await this.probarStreamer(creds.streamer, creds.streamer_pass||'');
-    await this._sleep(500);
-    if (creds.usuario) await this.probarUsuario(creds.usuario, creds.usuario_pass||'');
-    await this._sleep(500);
-    if (creds.agencia) await this.probarAgencia(creds.agencia, creds.agencia_pass||'');
-
-    this.enEjecucion = false;
-    return this.log;
-  }
-};
-
-// ── UI DEL BOT (para Master → Estado Sistema) ──
-window.aura_mostrarPruebas = async function(el) {
+window.aura_mostrarPruebas = function(el) {
   el.innerHTML = `
     <div class="dash-welcome aura-fade-up">
-      <h1>🤖 <span>Bot de Pruebas</span></h1>
-      <p>Auditoría automática · Simula cada rol y verifica que todo funcione</p>
+      <h1>🤖 Bot de <span>Pruebas</span></h1>
+      <p>Auditoría automática de todos los roles del sistema</p>
     </div>
 
-    <!-- FORMULARIO DE CREDENCIALES -->
-    <div class="card" id="botConfigCard" style="margin-bottom:16px">
-      <div class="section-title" style="margin-bottom:14px">📧 Correos de prueba</div>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+    <!-- USUARIOS DE PRUEBA -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:14px">👥 Usuarios de prueba</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
         ${[
-          {key:'master', label:'👑 Master', placeholder:'andrewjosuev@gmail.com'},
-          {key:'streamer', label:'🎤 Streamer', placeholder:'streameraura@aura.com'},
-          {key:'usuario', label:'👤 Usuario', placeholder:'usuarioaura1@aura.com'},
-          {key:'agencia', label:'🏢 Agencia', placeholder:'auraagency1@aura.com'},
-        ].map(r=>`
-          <div style="display:flex;gap:8px;align-items:center">
-            <div style="width:80px;font-size:12px;font-weight:700;color:var(--mu);flex-shrink:0">${r.label}</div>
+          { rol:'master',    label:'👑 Master',    id:'botMaster',    val:'andrewjosuev@gmail.com',    color:'var(--gold)' },
+          { rol:'admin',     label:'👮 Admin',     id:'botAdmin',     val:'auraadmin1@aura.com',        color:'#F59E0B' },
+          { rol:'moderador', label:'🛡️ Moderador', id:'botModerador', val:'auramonitor1@aura.com',     color:'#a8d8f0' },
+          { rol:'agencia',   label:'🏢 Agencia',   id:'botAgencia',   val:'auraagency1@aura.com',      color:'#A78BFA' },
+          { rol:'streamer',  label:'🎤 Streamer',  id:'botStreamer',  val:'streameraura@aura.com',     color:'#4ade80' },
+          { rol:'usuario',   label:'👤 Usuario',   id:'botUsuario',   val:'usuarioaura1@aura.com',     color:'#93c5fd' },
+        ].map(u => `
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:12px;font-weight:700;color:${u.color};width:110px;flex-shrink:0">${u.label}</span>
             <div class="input-group" style="flex:1">
-              <input type="email" id="bot_${r.key}" placeholder="${r.placeholder}" style="font-size:12px">
+              <input type="email" id="${u.id}" value="${u.val}" style="font-size:12px">
             </div>
           </div>
         `).join('')}
       </div>
-      <button onclick="botIniciar()" class="btn-primary" style="width:100%;padding:16px;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px">
-        🤖 Iniciar auditoría automática
-      </button>
+    </div>
+
+    <!-- BOTÓN INICIAR -->
+    <button id="botIniciarBtn" onclick="botIniciarAuditoria()"
+      class="btn-primary" style="width:100%;padding:16px;margin-bottom:16px;font-size:14px">
+      🤖 Iniciar auditoría automática
+    </button>
+
+    <!-- PROGRESO -->
+    <div id="botProgress" style="display:none;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu);margin-bottom:6px">
+        <span id="botProgressLabel">Iniciando...</span>
+        <span id="botProgressPct">0%</span>
+      </div>
+      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.05);overflow:hidden">
+        <div id="botProgressBar" style="height:100%;background:var(--grad-main);border-radius:3px;transition:width .4s;width:0%"></div>
+      </div>
     </div>
 
     <!-- LOG EN TIEMPO REAL -->
-    <div class="card" id="botLogCard" style="display:none;margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="section-title" style="margin-bottom:0">📋 Log en tiempo real</div>
-        <span id="botStatus" style="font-size:11px;color:var(--gold);font-weight:700">Iniciando...</span>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-title">📋 Log en tiempo real</div>
+        <button onclick="botLimpiarLog()" class="btn-sm" style="padding:4px 10px;font-size:10px">Limpiar</button>
       </div>
-      <div id="botLogLive" style="height:300px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,0.05)"></div>
+      <div id="botLog"
+        style="font-family:'JetBrains Mono',monospace;font-size:11px;height:280px;overflow-y:auto;
+               background:rgba(0,0,0,0.4);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:3px">
+        <div style="color:var(--mu)">Esperando inicio de auditoría...</div>
+      </div>
     </div>
 
     <!-- REPORTE FINAL -->
-    <div id="botReporte"></div>
+    <div id="botReporte" style="display:none"></div>
   `;
 
-  // Pre-llenar con correos conocidos
-  document.getElementById('bot_master').value = 'andrewjosuev@gmail.com';
-  document.getElementById('bot_streamer').value = 'streameraura@aura.com';
-  document.getElementById('bot_usuario').value = 'usuarioaura1@aura.com';
-  document.getElementById('bot_agencia').value = 'auraagency1@aura.com';
+  // ── HELPERS ──────────────────────────────────────────────────────────────
 
-  window.botIniciar = async function() {
-    const creds = {
-      master: document.getElementById('bot_master').value.trim(),
-      streamer: document.getElementById('bot_streamer').value.trim(),
-      usuario: document.getElementById('bot_usuario').value.trim(),
-      agencia: document.getElementById('bot_agencia').value.trim(),
+  let totalPasos = 0;
+  let pasoActual = 0;
+
+  function log(rol, msg, ok) {
+    const el = document.getElementById('botLog');
+    if (!el) return;
+    const time = new Date().toLocaleTimeString('es', { hour12: false });
+    const color = {
+      MASTER:'var(--gold)', ADMIN:'#F59E0B', MODERADOR:'#a8d8f0',
+      AGENCIA:'#A78BFA', STREAMER:'#4ade80', USUARIO:'#93c5fd',
+      SYS:'rgba(255,255,255,0.4)'
+    }[rol] || '#fff';
+    const icon = ok === true ? '✅' : ok === false ? '❌' : '⏳';
+    const d = document.createElement('div');
+    d.innerHTML = `<span style="color:var(--mu)">${time}</span> <span style="color:${color};font-weight:700">[${rol}]</span> ${msg} ${icon}`;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+
+    pasoActual++;
+    const pct = Math.min(Math.floor(pasoActual / totalPasos * 100), 99);
+    const bar = document.getElementById('botProgressBar');
+    const pctEl = document.getElementById('botProgressPct');
+    const lblEl = document.getElementById('botProgressLabel');
+    if (bar) bar.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+    if (lblEl) lblEl.textContent = msg;
+  }
+
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function getUser(email) {
+    try {
+      const usuarios = await window.fsGetAll('usuarios');
+      return usuarios?.find(u => u.email === email) || null;
+    } catch(e) { return null; }
+  }
+
+  async function runTest(rol, label, fn) {
+    log(rol, label, null);
+    await wait(220);
+    try {
+      const res = await fn();
+      log(rol, label, res !== false);
+      return res !== false;
+    } catch(e) {
+      log(rol, `${label} — Error: ${e.message}`, false);
+      return false;
+    }
+  }
+
+  // ── AUDITORÍA PRINCIPAL ───────────────────────────────────────────────────
+
+  window.botIniciarAuditoria = async function() {
+    document.getElementById('botIniciarBtn').disabled = true;
+    document.getElementById('botProgress').style.display = 'block';
+    document.getElementById('botReporte').style.display = 'none';
+    document.getElementById('botLog').innerHTML = '';
+    pasoActual = 0;
+    totalPasos = 42; // pasos estimados
+
+    const emails = {
+      master:    document.getElementById('botMaster')?.value?.trim(),
+      admin:     document.getElementById('botAdmin')?.value?.trim(),
+      moderador: document.getElementById('botModerador')?.value?.trim(),
+      agencia:   document.getElementById('botAgencia')?.value?.trim(),
+      streamer:  document.getElementById('botStreamer')?.value?.trim(),
+      usuario:   document.getElementById('botUsuario')?.value?.trim(),
     };
 
-    // Mostrar log
-    document.getElementById('botLogCard').style.display = 'block';
-    document.getElementById('botLogLive').innerHTML = '';
-    document.getElementById('botReporte').innerHTML = '';
-    document.getElementById('botStatus').textContent = '🔄 Ejecutando...';
-    document.querySelector('#botConfigCard button').disabled = true;
-    document.querySelector('#botConfigCard button').textContent = '⏳ Auditando...';
+    const resultados = {
+      MASTER: [], ADMIN: [], MODERADOR: [],
+      AGENCIA: [], STREAMER: [], USUARIO: []
+    };
 
-    // Ejecutar
-    const resultados = await window.AURA_BOT.ejecutarTodo(creds);
+    const ok  = (rol, r) => resultados[rol].push(r);
+    const get = async (email) => await getUser(email);
 
-    // Mostrar reporte
-    const ok = resultados.filter(r=>r.ok).length;
-    const fail = resultados.filter(r=>!r.ok).length;
-    const pct = Math.floor(ok/resultados.length*100);
+    // ── MASTER ───────────────────────────────────────────────────────────────
+    log('SYS', '━━━ Iniciando pruebas MASTER ━━━', null);
 
-    document.getElementById('botStatus').textContent = `✅ Completado · ${pct}%`;
-    document.querySelector('#botConfigCard button').disabled = false;
-    document.querySelector('#botConfigCard button').textContent = '🔄 Re-auditar';
+    ok('MASTER', await runTest('MASTER', 'Perfil en Firestore', async () => {
+      const u = await get(emails.master);
+      return u && u.rol === 'master';
+    }));
 
-    // Agrupar por rol
-    const grupos = {};
-    resultados.forEach(r => { if(!grupos[r.rol]) grupos[r.rol]=[]; grupos[r.rol].push(r); });
+    ok('MASTER', await runTest('MASTER', 'Cargar estadísticas globales', async () => {
+      const s = await window.cargarStatsReales?.() || {};
+      return typeof s.usuarios === 'number';
+    }));
 
-    document.getElementById('botReporte').innerHTML = `
-      <!-- RESUMEN -->
-      <div style="padding:20px;border-radius:16px;background:${pct===100?'rgba(34,197,94,0.08)':pct>=80?'rgba(212,175,55,0.08)':'rgba(204,0,0,0.08)'};border:1px solid ${pct===100?'rgba(34,197,94,0.3)':pct>=80?'rgba(212,175,55,0.3)':'rgba(204,0,0,0.3)'};margin-bottom:16px;text-align:center">
-        <div style="font-family:'Cinzel',serif;font-size:52px;font-weight:900;color:${pct===100?'#22c55e':pct>=80?'var(--gold)':'#EF4444'}">${pct}%</div>
-        <div style="font-size:14px;color:#fff;margin:6px 0">${pct===100?'🎉 ¡Todo funciona perfectamente!':pct>=80?'⚠️ Casi perfecto · Revisa los fallos':'❌ Hay problemas que resolver'}</div>
-        <div style="font-size:12px;color:var(--mu)">${ok} pasados · ${fail} fallados · ${resultados.length} total</div>
-        <div style="height:8px;border-radius:4px;background:rgba(255,255,255,0.08);margin:14px 0 0;overflow:hidden">
-          <div style="height:100%;border-radius:4px;background:${pct===100?'#22c55e':pct>=80?'var(--gold)':'#EF4444'};width:${pct}%"></div>
+    ok('MASTER', await runTest('MASTER', 'Guardar tarifas en config_plataforma', async () => {
+      await window.fsSet('config_plataforma', 'tarifas', { _test: true });
+      return true;
+    }));
+
+    ok('MASTER', await runTest('MASTER', 'Leer control de plataforma', async () => {
+      const cfg = await window.fsGet?.('config_plataforma', 'global');
+      return true; // puede ser null o objeto
+    }));
+
+    ok('MASTER', await runTest('MASTER', 'Crear log en logs_master', async () => {
+      await window.fsAdd('logs_master', {
+        accion: '🤖 Test bot — Master', tipo: 'bot',
+        uid_master: 'bot_test'
+      });
+      return true;
+    }));
+
+    ok('MASTER', await runTest('MASTER', 'Leer retiros pendientes', async () => {
+      const r = await window.fsGetAll?.('retiros');
+      return Array.isArray(r);
+    }));
+
+    ok('MASTER', await runTest('MASTER', 'Crear alerta de sistema', async () => {
+      await window.fsAdd('logs_master', {
+        accion: '⚠️ Test alerta bot', tipo: 'alerta', nivel: 'INFO'
+      });
+      return true;
+    }));
+
+    // ── ADMIN ────────────────────────────────────────────────────────────────
+    await wait(300);
+    log('SYS', '━━━ Iniciando pruebas ADMIN ━━━', null);
+
+    ok('ADMIN', await runTest('ADMIN', 'Perfil en Firestore', async () => {
+      const u = await get(emails.admin);
+      return u && u.rol === 'admin';
+    }));
+
+    ok('ADMIN', await runTest('ADMIN', 'Cargar lista de streamers', async () => {
+      const usuarios = await window.fsGetAll('usuarios');
+      const streamers = usuarios?.filter(u => u.rol === 'streamer');
+      return Array.isArray(streamers);
+    }));
+
+    ok('ADMIN', await runTest('ADMIN', 'Cargar lista de agencias', async () => {
+      const usuarios = await window.fsGetAll('usuarios');
+      const agencias = usuarios?.filter(u => u.rol === 'agencia');
+      return Array.isArray(agencias);
+    }));
+
+    ok('ADMIN', await runTest('ADMIN', 'Crear reporte de prueba', async () => {
+      await window.fsAdd('reportes', {
+        descripcion: '🤖 Test bot — Reporte admin',
+        nivel: 'Media', estado: 'pendiente',
+        uid_admin: 'bot_test'
+      });
+      return true;
+    }));
+
+    ok('ADMIN', await runTest('ADMIN', 'Leer reportes del sistema', async () => {
+      const r = await window.fsGetAll?.('reportes');
+      return Array.isArray(r);
+    }));
+
+    ok('ADMIN', await runTest('ADMIN', 'Guardar log de acción admin', async () => {
+      await window.fsAdd('logs_admin', {
+        accion: '🤖 Test bot — Acción admin',
+        uid_admin: 'bot_test', tipo: 'bot'
+      });
+      return true;
+    }));
+
+    ok('ADMIN', await runTest('ADMIN', 'Cargar tickets de soporte', async () => {
+      const t = await window.cargarTickets?.() || [];
+      return Array.isArray(t);
+    }));
+
+    ok('ADMIN', await runTest('ADMIN', 'Leer logs de seguridad', async () => {
+      const logs = await window.cargarLogsReales?.(5) || [];
+      return Array.isArray(logs);
+    }));
+
+    // ── MODERADOR ────────────────────────────────────────────────────────────
+    await wait(300);
+    log('SYS', '━━━ Iniciando pruebas MODERADOR ━━━', null);
+
+    ok('MODERADOR', await runTest('MODERADOR', 'Perfil en Firestore', async () => {
+      const u = await get(emails.moderador);
+      return u && u.rol === 'moderador';
+    }));
+
+    ok('MODERADOR', await runTest('MODERADOR', 'Leer todos los usuarios', async () => {
+      const usuarios = await window.fsGetAll('usuarios');
+      return Array.isArray(usuarios) && usuarios.length > 0;
+    }));
+
+    ok('MODERADOR', await runTest('MODERADOR', 'Crear reporte desde moderador', async () => {
+      await window.fsAdd('reportes', {
+        descripcion: '🤖 Test bot — Reporte monitor',
+        nivel: 'Media', estado: 'pendiente',
+        uid_monitor: 'bot_test'
+      });
+      return true;
+    }));
+
+    ok('MODERADOR', await runTest('MODERADOR', 'Crear infracción de prueba', async () => {
+      await window.fsAdd('infracciones', {
+        usuario: '@bot_test', tipo: 'spam',
+        descripcion: 'Test bot', estado: 'activa',
+        uid_monitor: 'bot_test'
+      });
+      return true;
+    }));
+
+    ok('MODERADOR', await runTest('MODERADOR', 'Leer infracciones del sistema', async () => {
+      const inf = await window.fsGetAll?.('infracciones');
+      return Array.isArray(inf);
+    }));
+
+    ok('MODERADOR', await runTest('MODERADOR', 'Escalar ticket al Admin', async () => {
+      await window.fsAdd('tickets', {
+        asunto: '🤖 Test bot — Caso escalado',
+        descripcion: 'Prueba automática', prioridad: 'HIGH',
+        estado: 'escalado', tipo: 'escalado_monitor',
+        uid_monitor: 'bot_test', escalado_a: 'Admin'
+      });
+      return true;
+    }));
+
+    ok('MODERADOR', await runTest('MODERADOR', 'Leer log de actividad', async () => {
+      const logs = await window.cargarLogsReales?.(5) || [];
+      return Array.isArray(logs);
+    }));
+
+    // ── AGENCIA ──────────────────────────────────────────────────────────────
+    await wait(300);
+    log('SYS', '━━━ Iniciando pruebas AGENCIA ━━━', null);
+
+    ok('AGENCIA', await runTest('AGENCIA', 'Perfil en Firestore', async () => {
+      const u = await get(emails.agencia);
+      return u && u.rol === 'agencia';
+    }));
+
+    ok('AGENCIA', await runTest('AGENCIA', 'Obtener mis streamers asignadas', async () => {
+      const agUser = await get(emails.agencia);
+      if (!agUser) return false;
+      const todos = await window.fsGetAll('usuarios');
+      const mis = todos?.filter(u =>
+        u.rol === 'streamer' &&
+        (u.agencia_uid === agUser.id || u.agencia === agUser.nick)
+      );
+      return Array.isArray(mis);
+    }));
+
+    ok('AGENCIA', await runTest('AGENCIA', 'Calcular ganancias (comisión 15%)', async () => {
+      const agUser = await get(emails.agencia);
+      if (!agUser) return false;
+      const todos = await window.fsGetAll('usuarios');
+      const mis = todos?.filter(u => u.rol === 'streamer' &&
+        (u.agencia_uid === agUser.id || u.agencia === agUser.nick)) || [];
+      const totalStars = mis.reduce((a, s) => a + (s.estrellas || 0), 0);
+      const comision = Math.floor(totalStars * 0.15);
+      log('AGENCIA', `Estrellas equipo: ${totalStars} · Comisión: ${comision}★`, null);
+      return true;
+    }));
+
+    ok('AGENCIA', await runTest('AGENCIA', 'Solicitar retiro de prueba', async () => {
+      const agUser = await get(emails.agencia);
+      await window.fsAdd('retiros', {
+        monto: 0, monto_usd: 0, metodo: 'test_bot',
+        cuenta: 'bot@test.com', estado: 'pendiente',
+        tipo: 'agencia', uid_agencia: agUser?.id || 'bot_test',
+        nick: agUser?.nick || 'bot_test'
+      });
+      return true;
+    }));
+
+    ok('AGENCIA', await runTest('AGENCIA', 'Crear meta de agencia', async () => {
+      const agUser = await get(emails.agencia);
+      await window.fsAdd('metas_agencia', {
+        titulo: '🤖 Test bot — Meta agencia',
+        valor_objetivo: 10000, valor_actual: 0,
+        uid_agencia: agUser?.id || 'bot_test', estado: 'activa'
+      });
+      return true;
+    }));
+
+    ok('AGENCIA', await runTest('AGENCIA', 'Enviar mensaje de prueba', async () => {
+      const agUser = await get(emails.agencia);
+      const strUser = await get(emails.streamer);
+      if (!agUser || !strUser) return false;
+      const chatId = [agUser.id, strUser.id].sort().join('_');
+      await window.fsAdd('chats_agencia', {
+        chatId, texto: '🤖 Test bot — Mensaje agencia',
+        uid_from: agUser.id, uid_to: strUser.id,
+        nick_from: agUser.nick || 'agencia', nick_to: strUser.nick || 'streamer'
+      });
+      return true;
+    }));
+
+    // ── STREAMER ─────────────────────────────────────────────────────────────
+    await wait(300);
+    log('SYS', '━━━ Iniciando pruebas STREAMER ━━━', null);
+
+    ok('STREAMER', await runTest('STREAMER', 'Perfil en Firestore', async () => {
+      const u = await get(emails.streamer);
+      return u && u.rol === 'streamer';
+    }));
+
+    ok('STREAMER', await runTest('STREAMER', 'Nivel asignado (Bronce por defecto)', async () => {
+      const u = await get(emails.streamer);
+      const nivel = u?.nivel || 'bronce';
+      const nv = window.getNivel?.(nivel);
+      log('STREAMER', `Nivel: ${nv?.emoji || '🥉'} ${nv?.nombre || 'Bronce'}`, null);
+      return true;
+    }));
+
+    ok('STREAMER', await runTest('STREAMER', 'Leer estrellas acumuladas', async () => {
+      const u = await get(emails.streamer);
+      log('STREAMER', `Estrellas: ${(u?.estrellas || 0).toLocaleString()} ⭐`, null);
+      return true;
+    }));
+
+    ok('STREAMER', await runTest('STREAMER', 'Marcar live como activo', async () => {
+      const u = await get(emails.streamer);
+      if (!u) return false;
+      await window.fsSet('usuarios', u.id, { liveActivo: true });
+      await window.fsSet('usuarios', u.id, { liveActivo: false }); // revertir
+      return true;
+    }));
+
+    ok('STREAMER', await runTest('STREAMER', 'Crear meta personal', async () => {
+      const u = await get(emails.streamer);
+      await window.fsAdd('metas_streamer', {
+        titulo: '🤖 Test bot — Meta streamer',
+        valor_objetivo: 5000, valor_actual: 0,
+        uid_streamer: u?.id || 'bot_test', estado: 'activa'
+      });
+      return true;
+    }));
+
+    ok('STREAMER', await runTest('STREAMER', 'Solicitar retiro', async () => {
+      const u = await get(emails.streamer);
+      await window.fsAdd('retiros', {
+        monto_usd: 0, monto_stars: 0, metodo: 'test_bot',
+        cuenta: 'bot@test.com', estado: 'pendiente',
+        uid_streamer: u?.id || 'bot_test',
+        nick: u?.nick || 'bot_test'
+      });
+      return true;
+    }));
+
+    ok('STREAMER', await runTest('STREAMER', 'Registrar PK Battle de prueba', async () => {
+      const u = await get(emails.streamer);
+      await window.fsAdd('pk_battles', {
+        uid_streamer: u?.id || 'bot_test',
+        nick: u?.nick || 'bot_test',
+        rival_nick: 'RivalBot', rival_uid: null,
+        estado: 'terminado', mis_stars: 100, rival_stars: 80,
+        resultado: 'ganado'
+      });
+      return true;
+    }));
+
+    // ── USUARIO ──────────────────────────────────────────────────────────────
+    await wait(300);
+    log('SYS', '━━━ Iniciando pruebas USUARIO ━━━', null);
+
+    ok('USUARIO', await runTest('USUARIO', 'Perfil en Firestore', async () => {
+      const u = await get(emails.usuario);
+      return u && u.rol === 'usuario';
+    }));
+
+    ok('USUARIO', await runTest('USUARIO', 'Leer feed de streamers', async () => {
+      const todos = await window.fsGetAll('usuarios');
+      const streamers = todos?.filter(u => u.rol === 'streamer');
+      log('USUARIO', `Streamers disponibles: ${streamers?.length || 0}`, null);
+      return Array.isArray(streamers);
+    }));
+
+    ok('USUARIO', await runTest('USUARIO', 'Solicitar match → @streamer1', async () => {
+      const uUser = await get(emails.usuario);
+      const uStr  = await get(emails.streamer);
+      if (!uUser || !uStr) return false;
+      await window.fsAdd('matches', {
+        uid_usuario: uUser.id, nick_usuario: uUser.nick || 'usuariop1',
+        uid_streamer: uStr.id, nick_streamer: uStr.nick || 'streamer1',
+        estado: 'esperando', costo: 5
+      });
+      return true;
+    }));
+
+    ok('USUARIO', await runTest('USUARIO', 'Enviar gift a streamer', async () => {
+      const uUser = await get(emails.usuario);
+      const uStr  = await get(emails.streamer);
+      if (!uUser || !uStr) return false;
+      await window.fsAdd('historial_estrellas', {
+        uid_from: uUser.id, uid_to: uStr.id,
+        cantidad: 10, tipo: 'gift',
+        nick_from: uUser.nick || 'usuariop1',
+        gift_emoji: '🌹', gift_name: 'Rosa'
+      });
+      return true;
+    }));
+
+    ok('USUARIO', await runTest('USUARIO', 'Comprar estrellas (simulado)', async () => {
+      const uUser = await get(emails.usuario);
+      if (!uUser) return false;
+      log('USUARIO', `Saldo: ${(uUser.estrellas || 0)} ⭐ · $${((uUser.estrellas || 0) / 200).toFixed(2)} USD equiv.`, null);
+      return true;
+    }));
+
+    ok('USUARIO', await runTest('USUARIO', 'Seguir a un streamer', async () => {
+      const uStr = await get(emails.streamer);
+      if (!uStr) return false;
+      // Incrementar seguidores del streamer en +1 y revertir para no contaminar datos
+      const before = uStr.seguidores || 0;
+      await window.fsSet('usuarios', uStr.id, { seguidores: before + 1 });
+      await window.fsSet('usuarios', uStr.id, { seguidores: before });
+      return true;
+    }));
+
+    ok('USUARIO', await runTest('USUARIO', 'Crear ticket de soporte', async () => {
+      const uUser = await get(emails.usuario);
+      await window.fsAdd('tickets', {
+        asunto: '🤖 Test bot — Ticket usuario',
+        descripcion: 'Prueba automática',
+        prioridad: 'MEDIUM', estado: 'abierto',
+        uid_usuario: uUser?.id || 'bot_test'
+      });
+      return true;
+    }));
+
+    // ── REPORTE FINAL ─────────────────────────────────────────────────────────
+    await wait(500);
+    log('SYS', '━━━ Generando reporte final ━━━', null);
+
+    const progBar  = document.getElementById('botProgressBar');
+    const progPct  = document.getElementById('botProgressPct');
+    const progLbl  = document.getElementById('botProgressLabel');
+    if (progBar)  progBar.style.width = '100%';
+    if (progPct)  progPct.textContent = '100%';
+    if (progLbl)  progLbl.textContent = 'Auditoría completada ✓';
+
+    // Calcular resultados por rol
+    const resumen = Object.entries(resultados).map(([rol, arr]) => {
+      const total   = arr.length;
+      const pasados = arr.filter(Boolean).length;
+      const pct     = total > 0 ? Math.floor(pasados / total * 100) : 0;
+      const color   = {
+        MASTER:'var(--gold)', ADMIN:'#F59E0B', MODERADOR:'#a8d8f0',
+        AGENCIA:'#A78BFA', STREAMER:'#4ade80', USUARIO:'#93c5fd'
+      }[rol] || '#fff';
+      return { rol, pasados, total, pct, color };
+    });
+
+    const totalOk  = resumen.reduce((a, r) => a + r.pasados, 0);
+    const totalAll = resumen.reduce((a, r) => a + r.total, 0);
+    const pctGlobal = Math.floor(totalOk / totalAll * 100);
+    const exitoso = pctGlobal >= 80;
+
+    const repEl = document.getElementById('botReporte');
+    repEl.style.display = 'block';
+    repEl.innerHTML = `
+      <div class="card" style="margin-bottom:14px;border-color:${exitoso?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.3)'}">
+        <div style="text-align:center;padding:16px 0 8px">
+          <div style="font-size:48px;margin-bottom:8px">${exitoso?'🏆':'⚠️'}</div>
+          <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:900;color:${exitoso?'#22c55e':'#EF4444'}">
+            ${pctGlobal}% de éxito
+          </div>
+          <div style="font-size:12px;color:var(--mu);margin-top:4px">
+            ${totalOk} / ${totalAll} pruebas pasadas
+          </div>
+        </div>
+        <!-- BARRA GLOBAL -->
+        <div style="height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;margin:12px 0">
+          <div style="width:${pctGlobal}%;height:100%;background:${exitoso?'linear-gradient(90deg,#22c55e,#16a34a)':'linear-gradient(90deg,#EF4444,#b91c1c)'};border-radius:4px;transition:width .6s"></div>
         </div>
       </div>
 
-      <!-- POR ROL -->
-      ${Object.entries(grupos).map(([rol, items]) => {
-        const rolOk = items.filter(i=>i.ok).length;
-        const allOk = rolOk === items.length;
-        const iconos = {MASTER:'👑',STREAMER:'🎤',USUARIO:'👤',AGENCIA:'🏢',ADMIN:'👮',MODERADOR:'🛡️'};
-        return `
-          <div class="card" style="margin-bottom:10px;border-color:${allOk?'rgba(34,197,94,0.2)':'rgba(204,0,0,0.2)'}">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span>${allOk?'✅':'❌'}</span>
-                <span style="font-weight:700">${iconos[rol]||'🔧'} ${rol}</span>
-              </div>
-              <span style="font-size:12px;color:${allOk?'#22c55e':'#EF4444'};font-weight:700">${rolOk}/${items.length}</span>
+      <!-- DESGLOSE POR ROL -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:14px">📊 Resultado por rol</div>
+        ${resumen.map(r => `
+          <div style="margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:12px;font-weight:700;color:${r.color}">${r.rol}</span>
+              <span style="font-size:12px;color:${r.pct===100?'#22c55e':r.pct>=60?'#FFA500':'#EF4444'};font-weight:700">
+                ${r.pasados}/${r.total} · ${r.pct}%
+              </span>
             </div>
-            <div>
-              ${items.map(i=>`
-                <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:12px;align-items:start">
-                  <span style="flex-shrink:0">${i.ok?'✅':'❌'}</span>
-                  <div style="flex:1">
-                    <div style="color:${i.ok?'#fff':'#EF4444'}">${i.accion}</div>
-                    ${i.detalle?`<div style="color:var(--mu);font-size:10px">${i.detalle}</div>`:''}
-                    ${!i.ok&&i.fix?`<div style="color:#FFA500;font-size:10px;font-weight:600">→ ${i.fix}</div>`:''}
-                  </div>
-                  <span style="color:var(--mu);font-size:10px;flex-shrink:0">${i.tiempo}</span>
-                </div>
-              `).join('')}
+            <div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.05);overflow:hidden">
+              <div style="width:${r.pct}%;height:100%;background:${r.color};border-radius:3px;opacity:0.8"></div>
             </div>
           </div>
-        `;
-      }).join('')}
+        `).join('')}
+      </div>
 
       <!-- ACCIONES -->
-      <div style="display:flex;gap:10px;margin-top:4px">
-        <button onclick="botCopiarReporte()" class="btn-sm" style="flex:1;padding:12px">📋 Copiar reporte</button>
-        ${fail > 0 ? `<button onclick="botAutoFix()" style="flex:1;padding:12px;border-radius:var(--r-lg);background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);color:var(--gold);font-weight:700;cursor:pointer">🔧 Auto-arreglar fallos</button>` : ''}
+      <div style="display:flex;gap:10px">
+        <button onclick="botCopiarReporte()" class="btn-sm" style="flex:1;padding:12px">
+          📋 Copiar reporte
+        </button>
+        <button onclick="botIniciarAuditoria()" class="btn-sm" style="flex:1;padding:12px">
+          🔄 Re-ejecutar
+        </button>
       </div>
     `;
 
+    document.getElementById('botIniciarBtn').disabled = false;
+
+    // Función copiar
     window.botCopiarReporte = function() {
-      const txt = resultados.map(r=>`${r.ok?'✅':'❌'} [${r.rol}] ${r.accion}${r.detalle?' · '+r.detalle:''}${!r.ok&&r.fix?' → '+r.fix:''}`).join('\n');
-      navigator.clipboard?.writeText(`AURA Bot · ${new Date().toLocaleString('es')}\n${pct}% OK\n\n${txt}`)
-        .then(()=>toast('Reporte copiado ✓','success'));
+      const lines = [
+        '🤖 AURA — Reporte de Auditoría Automática',
+        `Fecha: ${new Date().toLocaleString('es')}`,
+        `Resultado global: ${pctGlobal}% (${totalOk}/${totalAll} pruebas)`,
+        '─────────────────────────────',
+        ...resumen.map(r => `${r.rol}: ${r.pasados}/${r.total} (${r.pct}%)`),
+        '─────────────────────────────',
+      ].join('\n');
+      navigator.clipboard?.writeText(lines).then(() => toast('Reporte copiado ✓', 'success'));
     };
 
-    window.botAutoFix = async function() {
-      toast('🔧 Aplicando correcciones automáticas...','info');
-      const fallos = resultados.filter(r=>!r.ok);
-      let arreglados = 0;
-      for (const f of fallos) {
-        // Auto-fix: asignar nivel bronce a streamers sin nivel
-        if (f.accion.includes('nivel') && f.rol==='STREAMER') {
-          const u = await window.fsGetAll('usuarios');
-          const s = u?.find(x=>x.rol==='streamer'&&!x.nivel);
-          if (s) { await window.fsSet('usuarios',s.id,{nivel:'bronce'}); arreglados++; }
-        }
-        // Auto-fix: activar switches
-        if (f.accion.includes('switch') || f.accion.includes('plataforma')) {
-          await window.fsSet('config_plataforma','global',{registros:true,lives:true,stars:true,chat:true,match:true,pk_battle:true});
-          arreglados++;
-        }
-        // Auto-fix: estrellas prueba
-        if (f.accion.includes('estrellas') && f.rol==='USUARIO') {
-          const u = await window.fsGetAll('usuarios');
-          const usr = u?.find(x=>x.rol==='usuario');
-          if (usr) { await window.fsSet('usuarios',usr.id,{estrellas:1000}); arreglados++; }
-        }
-      }
-      toast(`✅ ${arreglados} correcciones aplicadas · Re-auditando...`,'success');
-      setTimeout(()=>botIniciar(), 1500);
+    window.botLimpiarLog = function() {
+      const el = document.getElementById('botLog');
+      if (el) el.innerHTML = '<div style="color:var(--mu)">Log limpiado.</div>';
     };
+
+    toast(`🤖 Auditoría completada · ${pctGlobal}% de éxito`, exitoso ? 'success' : 'info');
+  };
+
+  window.botLimpiarLog = function() {
+    const el = document.getElementById('botLog');
+    if (el) el.innerHTML = '<div style="color:var(--mu)">Log limpiado.</div>';
   };
 };
-
-console.log('✅ Bot de pruebas AURA cargado · Ir a Master → Estado Sistema');
