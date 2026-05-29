@@ -63,13 +63,15 @@ function rolColor(rol) {
 function master_global(el, p) {
   el.innerHTML = `<div class="dash-welcome aura-fade-up">
     <h1>🌍 Plataforma <span>Global</span></h1>
-    <p>Cargando estadísticas reales...</p>
+    <p id="masterGlobalSub">Cargando...</p>
   </div>
   <div id="masterGlobalStats" class="stats-grid"></div>
   <div id="masterGlobalContent"></div>`;
 
   // Cargar stats reales de Firestore
   cargarStatsReales().then(stats => {
+    const sub = document.getElementById('masterGlobalSub');
+    if (sub) sub.textContent = 'Estadísticas en tiempo real · ' + new Date().toLocaleTimeString('es');
     document.getElementById('masterGlobalStats').innerHTML = `
       ${mStatCard('👥 Usuarios totales', stats.usuarios, '#60A5FA')}
       ${mStatCard('🎤 Streamers', stats.streamers, '#4ade80')}
