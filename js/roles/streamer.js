@@ -1884,6 +1884,56 @@ function str_rooms(el, p, tipo) {
     }).catch(()=>toast('Error cerrando sala','error'));
   };
 
+  // ── strSalirRoom (botón "Salir" en lista de rooms) ──────────
+  window.strSalirRoom = function(salaId, tipo) {
+    if (!salaId) return;
+    // Si hay overlay activo cerrarlo
+    const overlay = document.getElementById('roomOverlay_' + salaId) || document.getElementById('agoraRoomOverlay');
+    if (overlay) overlay.remove();
+    // Decrementar participantes en Firestore
+    window.fsGet?.('salas', salaId).then(sala => {
+      if (sala) {
+        const nuevos = Math.max(0, (sala.participantes || 1) - 1);
+        window.fsSet?.('salas', salaId, { participantes: nuevos });
+      }
+    }).catch(()=>{});
+    toast('Saliste de la sala', 'info');
+    navigate(tipo === 'video' ? 'video' : 'voice');
+  };
+
+  // ── strMicRoom (toggle micrófono en room) ───────────────────
+  window.strMicRoom = function(salaId) {
+    const btn = document.getElementById('micBtn_' + salaId);
+    if (!btn) return;
+    const activo = btn.textContent.includes('ON');
+    btn.textContent = activo ? '🔇 Mic OFF' : '🎙️ Mic ON';
+    btn.style.background = activo ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)';
+    btn.style.borderColor = activo ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)';
+    btn.style.color = activo ? '#EF4444' : '#4ade80';
+    // Aplicar mute real si hay Agora activo
+    if (window._agoraLocalTracks?.audio) {
+      window._agoraLocalTracks.audio.setMuted(activo);
+    }
+    toast(activo ? '🔇 Micrófono silenciado' : '🎙️ Micrófono activado', 'info');
+  };
+
+  // ── strCamRoom (toggle cámara en room de video) ─────────────
+  window.strCamRoom = function(salaId) {
+    const btn = document.getElementById('camBtn_' + salaId);
+    if (!btn) return;
+    const activo = btn.textContent.includes('ON');
+    btn.textContent = activo ? '📷 Cam OFF' : '📹 Cam ON';
+    btn.style.background = activo ? 'rgba(239,68,68,0.1)' : 'rgba(96,165,250,0.1)';
+    btn.style.borderColor = activo ? 'rgba(239,68,68,0.3)' : 'rgba(96,165,250,0.3)';
+    btn.style.color = activo ? '#EF4444' : '#60A5FA';
+    // Aplicar mute real si hay Agora activo
+    if (window._agoraLocalTracks?.video) {
+      window._agoraLocalTracks.video.setMuted(activo);
+    }
+    toast(activo ? '📷 Cámara apagada' : '📹 Cámara activada', 'info');
+  };
+
+
   strCargarRooms(tipo);
 }
 

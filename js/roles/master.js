@@ -450,6 +450,83 @@ window.masterFiltrarUsers = function(q) {
   renderMasterUsers(filtered.length>0 || q ? filtered : window._masterUsuarios.filter(u=>u.rol===tabActivo), tabActivo);
 };
 
+// ── ASIGNAR AGENCIA A STREAMER ─────────────────────────────
+window.masterAsignarAgencia = async function(uid_streamer, nick_streamer) {
+  // Cargar agencias disponibles
+  let agencias = [];
+  try {
+    const usuarios = await window.fsGetAll('usuarios');
+    agencias = usuarios.filter(u => u.rol === 'agencia');
+  } catch(e) {}
+
+  const existing = document.getElementById('modalAsignarAg');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modalAsignarAg';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)';
+
+  modal.innerHTML = `
+    <div style="background:var(--black3);border:1px solid rgba(167,139,250,0.3);border-radius:20px;padding:24px;width:100%;max-width:380px">
+      <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#A78BFA;margin-bottom:6px">🏢 Asignar Agencia</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:16px">Streamer: <b style="color:#fff">@${nick_streamer}</b></div>
+
+      ${agencias.length === 0 ? `
+        <div style="text-align:center;padding:20px;color:var(--mu)">
+          <div style="font-size:30px;margin-bottom:8px">🏢</div>
+          No hay agencias registradas
+        </div>
+      ` : `
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;color:var(--mu);margin-bottom:8px">Selecciona una agencia:</div>
+          <select id="selectAgencia" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(167,139,250,0.3);border-radius:10px;padding:12px;color:#fff;font-size:13px;outline:none">
+            <option value="">— Sin agencia —</option>
+            ${agencias.map(a => `<option value="${a.id}">${a.nick || a.nombre} (${a.id.slice(0,8)}...)</option>`).join('')}
+          </select>
+        </div>
+      `}
+
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button onclick="document.getElementById('modalAsignarAg').remove()"
+          style="flex:1;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--mu);cursor:pointer;font-weight:700">
+          Cancelar
+        </button>
+        <button onclick="masterConfirmarAgencia('${uid_streamer}','${nick_streamer}')"
+          style="flex:1;padding:12px;border-radius:12px;background:linear-gradient(135deg,#A78BFA,#7C3AED);border:none;color:#fff;cursor:pointer;font-weight:700">
+          ✓ Asignar
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+};
+
+window.masterConfirmarAgencia = async function(uid_streamer, nick_streamer) {
+  const sel = document.getElementById('selectAgencia');
+  const ag_uid = sel ? sel.value : '';
+
+  try {
+    await window.fsSet('usuarios', uid_streamer, {
+      agencia_uid: ag_uid || null,
+      agencia_asignada_por: window._currentUser?.uid
+    });
+    await window.fsAdd('logs_master', {
+      accion: ag_uid
+        ? `Agencia asignada a @${nick_streamer}`
+        : `Agencia removida de @${nick_streamer}`,
+      uid_objetivo: uid_streamer,
+      uid_master: window._currentUser?.uid,
+      tipo: 'agencia'
+    });
+    document.getElementById('modalAsignarAg')?.remove();
+    toast(ag_uid ? `✅ Agencia asignada a @${nick_streamer}` : `✅ Agencia removida`, 'success');
+    navigate('streamers');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+};
+
+
 // ── 5. AGENCIAS ───────────────────────────
 function master_agencies(el, p) {
   el.innerHTML = `

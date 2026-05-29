@@ -95,6 +95,60 @@ function ag_dashboard(el, p) {
   });
 }
 
+// ── GENERAR LINK DE INVITACIÓN ────────────────────────────
+window.agGenerarLink = function() {
+  const perfil = window._currentPerfil;
+  if (!perfil) return;
+
+  const uid = perfil.uid || '';
+  const nick = encodeURIComponent(perfil.nick || perfil.nombre || 'agencia');
+  const base = window.location.origin || 'https://auraoficial-seven.vercel.app';
+  const link = `${base}?ref=${uid}&agencia=${nick}`;
+
+  // Copiar al clipboard
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(link).then(() => {
+      toast('🔗 Link copiado al portapapeles ✓', 'success');
+    }).catch(() => {
+      _mostrarLinkModal(link);
+    });
+  } else {
+    _mostrarLinkModal(link);
+  }
+};
+
+function _mostrarLinkModal(link) {
+  const existing = document.getElementById('modalLinkAg');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modalLinkAg';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)';
+  modal.innerHTML = `
+    <div style="background:var(--black3);border:1px solid rgba(212,175,55,0.3);border-radius:20px;padding:24px;width:100%;max-width:400px">
+      <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:14px">🔗 Tu link de invitación</div>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;font-size:11px;word-break:break-all;color:rgba(255,255,255,0.7);margin-bottom:14px;font-family:monospace">
+        ${link}
+      </div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:16px">
+        Comparte este link con streamers potenciales. Al registrarse quedarán vinculadas a tu agencia automáticamente.
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modalLinkAg').remove()"
+          style="flex:1;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--mu);cursor:pointer;font-weight:700">
+          Cerrar
+        </button>
+        <button onclick="navigator.clipboard?.writeText('${link}').then(()=>toast('Link copiado ✓','success'));document.getElementById('modalLinkAg').remove()"
+          style="flex:1;padding:12px;border-radius:12px;background:var(--grad-main);border:none;color:#fff;cursor:pointer;font-weight:700">
+          📋 Copiar
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+
 // ── HELPER: cargar streamers de esta agencia ──
 async function agCargarMisStreamers(p) {
   try {
