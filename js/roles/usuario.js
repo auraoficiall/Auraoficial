@@ -987,37 +987,221 @@ function usr_favoritos(el, p) {
 
 // ── 9. ROOMS ─────────────────────────────
 function usr_rooms(el, p) {
+  let tipoActual = 'voice';
+
   el.innerHTML = `
-    <div class="dash-welcome aura-fade-up"><h1>🎤 Voice & Video <span>Rooms</span></h1></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <button onclick="usrVerRooms('voice')" class="btn-sm" style="flex:1;padding:10px">🎤 Voice</button>
-      <button onclick="usrVerRooms('video')" class="btn-sm" style="flex:1;padding:10px">📹 Video</button>
+    <div class="dash-welcome aura-fade-up">
+      <h1>🎤 Voice & Video <span>Rooms</span></h1>
+      <p>Salas creadas por streamers · Entra y participa</p>
     </div>
-    <div id="usrRoomsContent"><div style="text-align:center;padding:20px;color:var(--mu)">Selecciona una categoría</div></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button onclick="usrVerRooms('voice')" id="tabVoice" class="btn-primary" style="flex:1;padding:12px">🎤 Voice Rooms</button>
+      <button onclick="usrVerRooms('video')" id="tabVideo" class="btn-sm" style="flex:1;padding:12px">📹 Video Rooms</button>
+    </div>
+    <div id="usrRoomsContent"><div style="text-align:center;padding:20px;color:var(--mu)">Cargando salas...</div></div>
   `;
+
   window.usrVerRooms = function(tipo) {
+    tipoActual = tipo;
+    // Update tabs
+    const tv = document.getElementById('tabVoice');
+    const tvd = document.getElementById('tabVideo');
+    if (tv) { tv.className = tipo==='voice'?'btn-primary':'btn-sm'; tv.style.flex='1'; tv.style.padding='12px'; }
+    if (tvd) { tvd.className = tipo==='video'?'btn-primary':'btn-sm'; tvd.style.flex='1'; tvd.style.padding='12px'; }
+
+    const cont = document.getElementById('usrRoomsContent');
+    if (cont) cont.innerHTML = '<div style="text-align:center;padding:20px;color:var(--mu)">Cargando...</div>';
+
     window.fsGetAll?.('salas').then(salas => {
-      const cont = document.getElementById('usrRoomsContent');
-      if (!cont) return;
-      const lista = salas?.filter(s=>s.tipo===tipo&&s.activa) || [];
+      if (!document.getElementById('usrRoomsContent')) return;
+      const cont2 = document.getElementById('usrRoomsContent');
+      if (!cont2) return;
+      const lista = (salas||[]).filter(s=>s.tipo===tipo && s.activa);
+
       if (lista.length === 0) {
-        cont.innerHTML = `<div class="card" style="text-align:center;padding:30px;color:var(--mu)">
-          No hay salas de ${tipo==='voice'?'voz':'video'} activas.
+        cont2.innerHTML = `<div class="card" style="text-align:center;padding:40px;color:var(--mu)">
+          <div style="font-size:48px;opacity:0.3;margin-bottom:14px">${tipo==='voice'?'🎤':'📹'}</div>
+          No hay salas de ${tipo==='voice'?'voz':'video'} activas ahora.<br>
+          <span style="font-size:12px">Las streamers crean salas desde su panel.</span>
         </div>`;
         return;
       }
-      cont.innerHTML = lista.map(s=>`
-        <div class="card card-row" style="margin-bottom:10px">
-          <div class="card-avatar" style="font-size:20px">${tipo==='voice'?'🎙️':'📹'}</div>
-          <div class="card-info">
-            <div class="card-name">${s.nombre}</div>
-            <div class="card-sub">Host: @${s.nick_host} · ${s.participantes||0} en sala</div>
+
+      cont2.innerHTML = lista.map(s=>`
+        <div class="card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#D4AF37);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;font-family:'Cinzel',serif;color:rgba(0,0,0,0.4);flex-shrink:0">
+              ${(s.nick_host||'?')[0].toUpperCase()}
+            </div>
+            <div style="flex:1">
+              <div style="font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:#fff">${s.nombre}</div>
+              <div style="font-size:11px;color:var(--mu);margin-top:2px">Host: @${s.nick_host}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:end;gap:4px">
+              <span class="badge badge-green" style="display:flex;align-items:center;gap:4px;font-size:9px">
+                <span style="width:5px;height:5px;border-radius:50%;background:#22c55e;display:inline-block"></span>ACTIVA
+              </span>
+              <span style="font-size:11px;color:var(--mu)">👥 ${s.participantes||0}</span>
+            </div>
           </div>
-          <button onclick="toast('Entrando a ${s.nombre}','success')" class="btn-sm" style="padding:8px 14px">Entrar</button>
+
+          <div style="display:flex;gap:8px">
+            <button onclick="usrEntrarRoom('${s.id||s.canal_agora}','${s.nombre}','${tipo}','${s.nick_host}')"
+              class="btn-primary" style="flex:1;padding:12px;display:flex;align-items:center;justify-content:center;gap:6px">
+              ${tipo==='voice'?'🎙️':'📹'} Entrar a la sala
+            </button>
+          </div>
         </div>
       `).join('');
-    }).catch(()=>{});
+    }).catch(()=>{
+      const c = document.getElementById('usrRoomsContent');
+      if (c) c.innerHTML = '<div class="card" style="text-align:center;padding:20px;color:var(--mu)">Error cargando salas.</div>';
+    });
   };
+
+  window.usrEntrarRoom = function(salaId, nombre, tipo, nickHost) {
+    toast(`${tipo==='voice'?'🎤':'📹'} Conectando a "${nombre}"...`, 'info');
+
+    // Incrementar participantes
+    window.fsGetAll?.('salas').then(salas => {
+      const sala = salas?.find(s=>s.id===salaId||s.canal_agora===salaId);
+      if (sala) window.fsSet?.('salas', sala.id_doc||salaId, {
+        participantes: (sala.participantes||0)+1
+      });
+    });
+
+    // Crear overlay de sala
+    const existing = document.getElementById('usrSalaOverlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'usrSalaOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9990;background:#0a0a0a;display:flex;flex-direction:column';
+
+    let micOn = false; // usuario empieza con mic OFF
+    let camOn = false;
+
+    overlay.innerHTML = `
+      <!-- HEADER -->
+      <div style="padding:14px 16px;background:rgba(0,0,0,0.95);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px">
+        <button onclick="usrSalirRoom('${salaId}')" style="background:none;border:none;color:var(--gold);font-size:22px;cursor:pointer;line-height:1">←</button>
+        <div style="flex:1">
+          <div style="font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:#fff">${nombre}</div>
+          <div style="font-size:11px;color:var(--mu)">Host: @${nickHost} · ${tipo==='voice'?'🎤 Sala de voz':'📹 Sala de video'}</div>
+        </div>
+        <div style="padding:5px 12px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:20px;display:flex;align-items:center;gap:5px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block"></span>
+          <span style="font-size:11px;color:#22c55e;font-weight:700">EN VIVO</span>
+        </div>
+      </div>
+
+      <!-- ÁREA PRINCIPAL -->
+      <div style="flex:1;overflow-y:auto;padding:16px">
+        <!-- HOST -->
+        <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Participantes</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:20px">
+          <!-- Host -->
+          <div style="text-align:center;padding:16px 8px;border-radius:14px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25)">
+            <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#D4AF37);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:rgba(0,0,0,0.4)">${nickHost[0].toUpperCase()}</div>
+            <div style="font-size:11px;font-weight:700;color:#fff">@${nickHost}</div>
+            <div style="font-size:9px;color:var(--gold);margin-top:2px">HOST</div>
+            <div style="margin-top:5px;font-size:16px">🎙️</div>
+          </div>
+          <!-- Yo -->
+          <div style="text-align:center;padding:16px 8px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
+            <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#0d1a2e);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:rgba(255,255,255,0.3)">${(p.nick||p.nombre||'?')[0].toUpperCase()}</div>
+            <div style="font-size:11px;font-weight:700;color:#fff">@${p.nick||p.nombre}</div>
+            <div style="font-size:9px;color:var(--mu);margin-top:2px">Tú</div>
+            <div style="margin-top:5px;font-size:16px" id="usrMicIndicador">${micOn?'🎙️':'🔇'}</div>
+          </div>
+        </div>
+
+        <!-- CHAT -->
+        <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Chat de la sala</div>
+        <div id="usrSalaChat" style="min-height:120px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:10px;padding:10px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid rgba(255,255,255,0.05)">
+          <div style="font-size:11px;color:var(--mu);text-align:center;padding:8px">Saluda al host 👋</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div class="input-group" style="flex:1">
+            <input type="text" id="usrSalaChatInp" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter')usrSalaChatEnviar()">
+          </div>
+          <button onclick="usrSalaChatEnviar()" style="padding:0 14px;border-radius:var(--r-lg);background:var(--grad-main);border:none;color:#fff;cursor:pointer;font-size:16px">➤</button>
+        </div>
+      </div>
+
+      <!-- CONTROLES -->
+      <div style="padding:14px 16px 24px;background:rgba(0,0,0,0.95);border-top:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-around">
+        <button onclick="usrMicToggle()" id="usrMicBtn" style="width:52px;height:52px;border-radius:50%;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#EF4444;cursor:pointer;font-size:22px">🔇</button>
+        ${tipo==='video'?`<button onclick="usrCamToggle()" id="usrCamBtn" style="width:52px;height:52px;border-radius:50%;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#EF4444;cursor:pointer;font-size:22px">🚫</button>`:''}
+        <button onclick="usrSalirRoom('${salaId}')" style="width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#CC0000,#7a0000);border:none;color:#fff;cursor:pointer;font-size:24px;box-shadow:0 0 20px rgba(204,0,0,0.4)">📵</button>
+        <button onclick="usrSalaCompartir('${nombre}')" style="width:52px;height:52px;border-radius:50%;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);cursor:pointer;font-size:22px">📤</button>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    window.usrMicToggle = function() {
+      micOn = !micOn;
+      const btn = document.getElementById('usrMicBtn');
+      const ind = document.getElementById('usrMicIndicador');
+      if (btn) { btn.textContent = micOn?'🎙️':'🔇'; btn.style.background = micOn?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)'; btn.style.borderColor = micOn?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.4)'; btn.style.color = micOn?'#22c55e':'#EF4444'; }
+      if (ind) ind.textContent = micOn?'🎙️':'🔇';
+      toast(micOn?'Micrófono activado':'Micrófono silenciado','info');
+    };
+
+    window.usrCamToggle = function() {
+      camOn = !camOn;
+      const btn = document.getElementById('usrCamBtn');
+      if (btn) { btn.textContent = camOn?'📹':'🚫'; btn.style.background = camOn?'rgba(96,165,250,0.15)':'rgba(239,68,68,0.15)'; btn.style.borderColor = camOn?'rgba(96,165,250,0.4)':'rgba(239,68,68,0.4)'; btn.style.color = camOn?'#60A5FA':'#EF4444'; }
+      toast(camOn?'Cámara activada':'Cámara apagada','info');
+    };
+
+    window.usrSalaChatEnviar = function() {
+      const inp = document.getElementById('usrSalaChatInp');
+      if (!inp?.value?.trim()) return;
+      const texto = inp.value.trim();
+      inp.value = '';
+      const chat = document.getElementById('usrSalaChat');
+      if (chat) {
+        // Limpiar mensaje inicial
+        if (chat.children.length === 1 && chat.children[0].textContent.includes('Saluda')) chat.innerHTML = '';
+        const d = document.createElement('div');
+        d.style.cssText = 'display:flex;gap:6px;font-size:12px;padding:4px 0';
+        d.innerHTML = `<span style="color:var(--gold);font-weight:700;flex-shrink:0">@${p.nick||p.nombre}:</span><span style="color:#fff">${texto}</span>`;
+        chat.appendChild(d);
+        chat.scrollTop = chat.scrollHeight;
+      }
+      window.fsAdd?.('chats_agencia', {
+        chatId: 'sala_'+salaId,
+        texto, uid_from: p.uid,
+        nick_from: p.nick||p.nombre, tipo: 'sala'
+      }).catch(()=>{});
+    };
+
+    window.usrSalirRoom = function(id) {
+      window.fsGetAll?.('salas').then(salas => {
+        const sala = salas?.find(s=>s.id===id||s.canal_agora===id);
+        if (sala) window.fsSet?.('salas', sala.id_doc||id, {
+          participantes: Math.max(0,(sala.participantes||1)-1)
+        });
+      });
+      const ov = document.getElementById('usrSalaOverlay');
+      if (ov) ov.remove();
+      toast('Saliste de la sala','info');
+    };
+
+    window.usrSalaCompartir = function(nombre) {
+      const url = window.location.origin;
+      if (navigator.share) {
+        navigator.share({ title:`Sala AURA: ${nombre}`, text:`Entra a la sala "${nombre}" en AURA`, url });
+      } else {
+        navigator.clipboard?.writeText(url).then(()=>toast('Link copiado ✓','success'));
+      }
+    };
+  };
+
+  // Cargar voice rooms por defecto
+  window.usrVerRooms('voice');
 }
 
 // ── 10. RANKINGS ─────────────────────────

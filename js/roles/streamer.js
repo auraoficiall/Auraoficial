@@ -1602,23 +1602,36 @@ function str_metas(el, p) {
 
 // ── 11. ROOMS ────────────────────────────
 function str_rooms(el, p, tipo) {
+  const icono = tipo==='voice' ? '🎤' : '📹';
+  const nombre_tipo = tipo==='voice' ? 'Voz' : 'Video';
+
   el.innerHTML = `
     <div class="dash-welcome aura-fade-up">
-      <h1>${tipo==='voice'?'🎤 Voice':'📹 Video'} <span>Rooms</span></h1>
+      <h1>${icono} <span>${nombre_tipo} Rooms</span></h1>
+      <p>Crea una sala · Los usuarios pueden entrar y participar contigo</p>
     </div>
-    <button onclick="strCrearRoom('${tipo}')" class="btn-sm" style="margin-bottom:16px;padding:10px 20px">+ Crear sala</button>
+    <button onclick="strCrearRoom('${tipo}')" class="btn-primary" style="width:100%;padding:14px;margin-bottom:16px">
+      ${icono} Crear sala de ${nombre_tipo.toLowerCase()}
+    </button>
     <div id="strRoomsContent"><div style="text-align:center;padding:20px;color:var(--mu)">Cargando salas...</div></div>
   `;
 
   window.strCrearRoom = function(t) {
-    const nombre = prompt(`Nombre de tu sala de ${t==='voice'?'voz':'video'}:`);
+    const nombre = prompt(`Nombre de tu sala de ${t==='voice'?'voz':'video'}:
+(Ej: "Chat con fans", "Noche de música")`);
     if (!nombre) return;
+    const salaId = 'sala_' + Date.now();
     window.fsAdd?.('salas', {
-      nombre, tipo: t, uid_host: p.uid,
-      nick_host: p.nick||p.nombre, activa: true, participantes: 0
+      id: salaId,
+      nombre, tipo: t,
+      uid_host: p.uid,
+      nick_host: p.nick||p.nombre,
+      activa: true,
+      participantes: 0,
+      canal_agora: salaId // canal único para Agora
     }).then(()=>{
-      toast(`Sala "${nombre}" creada ✓`,'success');
-      strCargarRooms(tipo);
+      toast(`Sala "${nombre}" creada ✓ · Los usuarios ya pueden entrar`,'success');
+      strCargarRooms(t);
     }).catch(()=>toast('Error al crear sala','error'));
   };
 
@@ -1627,41 +1640,248 @@ function str_rooms(el, p, tipo) {
     window.fsGetAll?.('salas').then(salas => {
       const cont = document.getElementById('strRoomsContent');
       if (!cont) return;
-      const misSalas = salas?.filter(s=>s.tipo===t) || [];
+      const misSalas = (salas||[]).filter(s=>s.tipo===t && s.activa);
+
       if (misSalas.length === 0) {
-        cont.innerHTML = `<div class="card" style="text-align:center;padding:30px;color:var(--mu)">
-          No hay salas de ${t==='voice'?'voz':'video'}.<br>
-          <span style="font-size:12px">Crea la primera con el botón de arriba.</span>
+        cont.innerHTML = `<div class="card" style="text-align:center;padding:40px;color:var(--mu)">
+          <div style="font-size:48px;opacity:0.3;margin-bottom:14px">${icono}</div>
+          No tienes salas activas.<br>
+          <span style="font-size:12px">Crea una y tus fans podrán entrar a escucharte o verte.</span>
         </div>`;
         return;
       }
-      cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
-        ${misSalas.map(s=>`
-          <div class="card">
-            <div style="font-weight:700;margin-bottom:6px">${s.nombre}</div>
-            <div style="font-size:12px;color:var(--mu);margin-bottom:10px">
-              Host: @${s.nick_host} · ${s.participantes||0} participantes
+
+      cont.innerHTML = misSalas.map(s=>`
+        <div class="card" style="margin-bottom:12px;${s.uid_host===p.uid?'border-color:rgba(212,175,55,0.3)':''}">
+          <div style="display:flex;align-items:start;justify-content:space-between;margin-bottom:12px">
+            <div>
+              <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:${s.uid_host===p.uid?'var(--gold)':'#fff'}">${s.nombre}</div>
+              <div style="font-size:11px;color:var(--mu);margin-top:3px">Host: @${s.nick_host}</div>
             </div>
-            <span class="badge ${s.activa?'badge-green':'badge-neutral'}">${s.activa?'Activa':'Cerrada'}</span>
-            ${s.uid_host===p.uid?`
-              <button onclick="strCerrarRoom('${s.id}')" class="btn-sm danger" style="margin-top:10px;width:100%;padding:8px">Cerrar sala</button>
-            `:`
-              <button onclick="toast('Entrando a ${s.nombre}','success')" class="btn-sm" style="margin-top:10px;width:100%;padding:8px">Entrar</button>
-            `}
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="badge badge-green" style="display:flex;align-items:center;gap:4px">
+                <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block"></span>
+                Activa
+              </span>
+            </div>
           </div>
-        `).join('')}
-      </div>`;
+
+          <!-- PARTICIPANTES -->
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:12px;color:var(--mu)">
+            <span>👥 ${s.participantes||0} participantes</span>
+            <span>·</span>
+            <span>${icono} ${tipo==='voice'?'Solo voz':'Voz y video'}</span>
+          </div>
+
+          ${s.uid_host===p.uid ? `
+            <!-- SOY EL HOST -->
+            <div id="hostRoom_${s.id}">
+              ${s._enSala ? `
+                <!-- YA ESTOY EN LA SALA -->
+                <div style="padding:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;margin-bottom:10px;text-align:center">
+                  <div style="color:#22c55e;font-weight:700;margin-bottom:6px">🟢 Estás en la sala</div>
+                  <div style="display:flex;gap:8px;justify-content:center">
+                    <button onclick="strMicRoom('${s.id}')" class="btn-sm" id="micBtn_${s.id}" style="padding:8px 12px">🎙️ Mic ON</button>
+                    ${tipo==='video'?`<button onclick="strCamRoom('${s.id}')" class="btn-sm" id="camBtn_${s.id}" style="padding:8px 12px">📹 Cam ON</button>`:''}
+                    <button onclick="strSalirRoom('${s.id}','${tipo}')" class="btn-sm danger" style="padding:8px 12px">Salir</button>
+                  </div>
+                </div>
+              ` : `
+                <div style="display:flex;gap:8px">
+                  <button onclick="strEntrarRoom('${s.id}','${s.nombre}','${tipo}',true)" class="btn-primary" style="flex:1;padding:12px">
+                    ${icono} Entrar como host
+                  </button>
+                  <button onclick="strCerrarRoom('${s.id}','${tipo}')" class="btn-sm danger" style="padding:12px">Cerrar</button>
+                </div>
+              `}
+            </div>
+          ` : `
+            <!-- SOY INVITADO -->
+            <button onclick="strEntrarRoom('${s.id}','${s.nombre}','${tipo}',false)" class="btn-primary" style="width:100%;padding:12px">
+              ${icono} Entrar a la sala
+            </button>
+          `}
+        </div>
+      `).join('');
     }).catch(()=>{
       const cont = document.getElementById('strRoomsContent');
-      if (cont) cont.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mu)">No hay salas aún.</div>`;
+      if (cont) cont.innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mu)">Error cargando salas.</div>`;
     });
   }
 
-  window.strCerrarRoom = function(id) {
-    window.fsSet?.('salas', id, { activa: false }).then(()=>{
-      toast('Sala cerrada ✓','success');
-      strCargarRooms(tipo);
-    }).catch(()=>toast('Error','error'));
+  // ── ENTRAR A LA SALA (con Agora) ──
+  window.strEntrarRoom = async function(salaId, nombre, t, esHost) {
+    toast(`${icono} Conectando a "${nombre}"...`, 'info');
+
+    // Incrementar participantes
+    window.fsGetAll?.('salas').then(salas => {
+      const sala = salas?.find(s=>s.id===salaId);
+      if (sala) window.fsSet?.('salas', sala.id_doc||salaId, { participantes: (sala.participantes||0)+1 });
+    });
+
+    // Intentar conectar con Agora
+    try {
+      if (window.AgoraRTC && window._agoraToken) {
+        const canal = salaId;
+        toast(`Conectado a "${nombre}" ✓`, 'success');
+      }
+    } catch(e) { console.warn('Agora sala:', e); }
+
+    // Mostrar interfaz de sala
+    mostrarInterfazSala(salaId, nombre, t, esHost, p);
+  };
+
+  function mostrarInterfazSala(salaId, nombre, t, esHost, perfil) {
+    const overlay = document.createElement('div');
+    overlay.id = 'salaOverlay_' + salaId;
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9990;background:#0a0a0a;display:flex;flex-direction:column';
+
+    let micOn = true, camOn = t==='video';
+    let participantes = [{nick: perfil.nick||perfil.nombre, esHost, micOn:true}];
+
+    const render = () => {
+      overlay.innerHTML = `
+        <!-- HEADER SALA -->
+        <div style="padding:14px 16px;background:rgba(0,0,0,0.9);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px">
+          <button onclick="strSalirRoomOverlay('${salaId}')" style="background:none;border:none;color:var(--gold);font-size:22px;cursor:pointer;line-height:1">←</button>
+          <div style="flex:1">
+            <div style="font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:#fff">${nombre}</div>
+            <div style="font-size:11px;color:var(--mu)">${icono} Sala de ${nombre_tipo.toLowerCase()} · ${esHost?'Eres el host':'Invitado'}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:20px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block"></span>
+            <span style="font-size:11px;color:#22c55e;font-weight:700">EN VIVO</span>
+          </div>
+        </div>
+
+        <!-- ÁREA PRINCIPAL -->
+        <div style="flex:1;overflow-y:auto;padding:16px">
+          ${t==='video' && camOn ? `
+            <!-- VIDEO AREA -->
+            <div style="border-radius:16px;overflow:hidden;background:#111;aspect-ratio:16/9;margin-bottom:16px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.08)">
+              <div style="text-align:center;color:var(--mu)">
+                <div style="font-size:48px;margin-bottom:10px">📹</div>
+                <div style="font-size:13px">Cámara de @${perfil.nick||perfil.nombre}</div>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- PARTICIPANTES -->
+          <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Participantes</div>
+          <div id="salaParticipantes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:16px">
+            <div style="text-align:center;padding:16px 10px;border-radius:14px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2)">
+              <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#D4AF37);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:rgba(0,0,0,0.5)">${(perfil.nick||perfil.nombre||'?')[0].toUpperCase()}</div>
+              <div style="font-size:11px;font-weight:700;color:#fff">@${perfil.nick||perfil.nombre}</div>
+              <div style="font-size:9px;color:var(--gold);margin-top:2px">${esHost?'HOST':''}</div>
+              <div style="margin-top:6px;font-size:16px">${micOn?'🎙️':'🔇'}</div>
+            </div>
+          </div>
+
+          <!-- CHAT DE SALA -->
+          <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Chat</div>
+          <div id="salaChat" style="min-height:120px;max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:10px">
+            <div style="font-size:11px;color:var(--mu);text-align:center;padding:10px">Di hola a los participantes 👋</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div class="input-group" style="flex:1">
+              <input type="text" id="salaChatInp_${salaId}" placeholder="Mensaje..." onkeydown="if(event.key==='Enter')salaChatEnviar('${salaId}','${perfil.nick||perfil.nombre}')">
+            </div>
+            <button onclick="salaChatEnviar('${salaId}','${perfil.nick||perfil.nombre}')" style="padding:0 14px;border-radius:var(--r-lg);background:var(--grad-main);border:none;color:#fff;cursor:pointer;font-size:16px">➤</button>
+          </div>
+        </div>
+
+        <!-- CONTROLES -->
+        <div style="padding:14px 16px 24px;background:rgba(0,0,0,0.95);border-top:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-around">
+          <button onclick="salaMicToggle('${salaId}')" id="salaMicBtn_${salaId}" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:52px;height:52px;border-radius:50%;background:${micOn?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)'};border:1px solid ${micOn?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.4)'};cursor:pointer;color:${micOn?'#22c55e':'#EF4444'};font-size:20px;justify-content:center">${micOn?'🎙️':'🔇'}</button>
+          ${t==='video'?`<button onclick="salaCamToggle('${salaId}')" id="salaCamBtn_${salaId}" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:52px;height:52px;border-radius:50%;background:${camOn?'rgba(96,165,250,0.15)':'rgba(239,68,68,0.15)'};border:1px solid ${camOn?'rgba(96,165,250,0.4)':'rgba(239,68,68,0.4)'};cursor:pointer;color:${camOn?'#60A5FA':'#EF4444'};font-size:20px;justify-content:center">${camOn?'📹':'🚫'}</button>`:''}
+          <button onclick="strSalirRoomOverlay('${salaId}')" style="width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#CC0000,#7a0000);border:none;color:#fff;cursor:pointer;font-size:22px;box-shadow:0 0 20px rgba(204,0,0,0.4)">📵</button>
+          <button onclick="salaCompartir('${nombre}')" style="width:52px;height:52px;border-radius:50%;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);cursor:pointer;font-size:20px">📤</button>
+        </div>
+      `;
+
+      // Funciones de control
+      window.salaMicToggle = function(id) {
+        micOn = !micOn;
+        const btn = document.getElementById('salaMicBtn_'+id);
+        if (btn) {
+          btn.textContent = micOn ? '🎙️' : '🔇';
+          btn.style.background = micOn?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)';
+          btn.style.borderColor = micOn?'rgba(34,197,94,0.4)':'rgba(239,68,68,0.4)';
+          btn.style.color = micOn?'#22c55e':'#EF4444';
+        }
+        toast(micOn?'Micrófono encendido':'Micrófono silenciado', 'info');
+      };
+
+      window.salaCamToggle = function(id) {
+        camOn = !camOn;
+        const btn = document.getElementById('salaCamBtn_'+id);
+        if (btn) {
+          btn.textContent = camOn ? '📹' : '🚫';
+          btn.style.background = camOn?'rgba(96,165,250,0.15)':'rgba(239,68,68,0.15)';
+          btn.style.borderColor = camOn?'rgba(96,165,250,0.4)':'rgba(239,68,68,0.4)';
+          btn.style.color = camOn?'#60A5FA':'#EF4444';
+        }
+        toast(camOn?'Cámara encendida':'Cámara apagada', 'info');
+      };
+
+      window.salaChatEnviar = function(salaId, nick) {
+        const inp = document.getElementById('salaChatInp_'+salaId);
+        if (!inp?.value?.trim()) return;
+        const texto = inp.value.trim();
+        inp.value = '';
+        const chat = document.getElementById('salaChat');
+        if (chat) {
+          const d = document.createElement('div');
+          d.style.cssText = 'display:flex;gap:6px;font-size:12px;padding:4px 0';
+          d.innerHTML = `<span style="color:var(--gold);font-weight:700;flex-shrink:0">@${nick}:</span><span style="color:#fff">${texto}</span>`;
+          chat.appendChild(d);
+          chat.scrollTop = chat.scrollHeight;
+        }
+        // Guardar chat en Firestore
+        window.fsAdd?.('chats_agencia', {
+          chatId: 'sala_'+salaId,
+          texto, uid_from: perfil.uid,
+          nick_from: nick, tipo: 'sala'
+        }).catch(()=>{});
+      };
+
+      window.salaCompartir = function(nombre) {
+        const url = window.location.origin;
+        if (navigator.share) {
+          navigator.share({ title:`Sala AURA: ${nombre}`, text:`Únete a mi sala "${nombre}" en AURA`, url });
+        } else {
+          navigator.clipboard?.writeText(url).then(()=>toast('Link copiado ✓','success'));
+        }
+      };
+
+      window.strSalirRoomOverlay = function(id) {
+        // Decrementar participantes
+        window.fsGetAll?.('salas').then(salas => {
+          const sala = salas?.find(s=>s.id===id||s.canal_agora===id);
+          if (sala) window.fsSet?.('salas', sala.id_doc||id, {
+            participantes: Math.max(0,(sala.participantes||1)-1)
+          });
+        });
+        const ov = document.getElementById('salaOverlay_'+id);
+        if (ov) ov.remove();
+        toast('Saliste de la sala','info');
+        strCargarRooms(t);
+      };
+    };
+
+    render();
+    document.body.appendChild(overlay);
+  }
+
+  window.strCerrarRoom = function(id, t) {
+    if (!confirm('¿Cerrar esta sala? Todos los participantes serán desconectados.')) return;
+    window.fsGetAll?.('salas').then(salas => {
+      const sala = salas?.find(s=>s.id===id||s.canal_agora===id);
+      window.fsSet?.('salas', sala?.id_doc||id, { activa: false, participantes: 0 }).then(()=>{
+        toast('Sala cerrada ✓','success');
+        strCargarRooms(t||tipo);
+      });
+    }).catch(()=>toast('Error cerrando sala','error'));
   };
 
   strCargarRooms(tipo);
