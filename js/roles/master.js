@@ -231,63 +231,223 @@ function master_lives(el, p) {
 
 // ── 4. STREAMERS ─────────────────────────
 function master_streamers(el, p) {
+  // Tabs de roles
+  const tabs = [
+    {key:'streamer',  label:'🎤 Streamers',   color:'#22c55e'},
+    {key:'usuario',   label:'👤 Usuarios',     color:'#60A5FA'},
+    {key:'agencia',   label:'🏢 Agencias',     color:'#A78BFA'},
+    {key:'admin',     label:'👮 Admins',       color:'#F59E0B'},
+    {key:'moderador', label:'🛡️ Moderadores', color:'#EF4444'},
+  ];
+  let tabActual = 'streamer';
+
   el.innerHTML = `
     <div class="dash-welcome aura-fade-up">
-      <h1>👩 <span>Usuarios & Streamers</span></h1>
-      <p>Cargando usuarios reales...</p>
+      <h1>👥 <span>Gestión de Usuarios</span></h1>
+      <p>Administra todos los roles de la plataforma</p>
     </div>
+
+    <!-- TABS -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px">
+      ${tabs.map(t=>`
+        <button id="tab_${t.key}" onclick="masterVerTab('${t.key}')"
+          style="padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:${t.key==='streamer'?`rgba(34,197,94,0.1)`:'transparent'};color:${t.key==='streamer'?t.color:'var(--mu)'};transition:all .2s">
+          ${t.label}
+        </button>
+      `).join('')}
+    </div>
+
+    <!-- BUSCADOR -->
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
       <div class="input-group" style="flex:1;min-width:200px">
         <span class="input-icon">🔍</span>
         <input type="text" id="masterBuscarUser" placeholder="Buscar por nick o email..." oninput="masterFiltrarUsers(this.value)">
       </div>
-      <button class="btn-sm" onclick="masterCrearAdmin()">+ Nuevo Admin</button>
     </div>
+
     <div id="masterUsersTable">
       <div style="text-align:center;padding:30px;color:var(--mu)">Cargando...</div>
     </div>
   `;
 
+  // Cargar usuarios
   cargarUsuariosReales().then(usuarios => {
     window._masterUsuarios = usuarios;
-    renderMasterUsers(usuarios);
+    renderMasterUsers(usuarios, tabActual);
   });
+
+  window.masterVerTab = function(key) {
+    tabActual = key;
+    tabs.forEach(t => {
+      const btn = document.getElementById('tab_'+t.key);
+      if (!btn) return;
+      const active = t.key === key;
+      btn.style.background = active ? `${t.color}18` : 'transparent';
+      btn.style.color = active ? t.color : 'var(--mu)';
+      btn.style.borderColor = active ? `${t.color}40` : 'rgba(255,255,255,0.08)';
+    });
+    if (window._masterUsuarios) {
+      const q = document.getElementById('masterBuscarUser')?.value || '';
+      masterFiltrarUsers(q);
+    }
+  };
 }
 
-function renderMasterUsers(usuarios) {
+function renderMasterUsers(usuarios, rol) {
   const cont = document.getElementById('masterUsersTable');
   if (!cont) return;
-  if (usuarios.length === 0) {
-    cont.innerHTML = `<div style="text-align:center;padding:30px;color:var(--mu)">
-      No hay usuarios registrados aún.<br>Cuando alguien se registre aparecerá aquí.
+
+  const filtrados = usuarios.filter(u => u.rol === rol);
+  const colores = {streamer:'#22c55e',usuario:'#60A5FA',agencia:'#A78BFA',admin:'#F59E0B',moderador:'#EF4444',master:'#D4AF37'};
+
+  if (filtrados.length === 0) {
+    cont.innerHTML = `<div class="card" style="text-align:center;padding:40px;color:var(--mu)">
+      <div style="font-size:40px;opacity:0.3;margin-bottom:12px">👥</div>
+      No hay ${rol}s registrados aún.
     </div>`;
     return;
   }
-  cont.innerHTML = mCard(mTable(
-    ['Nick','Email','Rol','País','Estado','Acciones'],
-    usuarios.map(u => [
-      `<span style="font-weight:600;color:${rolColor(u.rol)}">@${u.nick||u.nombre||'?'}</span>`,
-      `<span style="color:var(--mu);font-size:12px">${u.email||'—'}</span>`,
-      `<span class="badge" style="background:${rolColor(u.rol)}18;color:${rolColor(u.rol)};border-color:${rolColor(u.rol)}40">${u.rol}</span>`,
-      u.pais||'—',
-      `<span class="badge ${u.estado==='activo'?'badge-green':u.estado==='pendiente'?'badge-orange':'badge-red'}">${u.estado||'activo'}</span>`,
-      `<div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${u.estado==='pendiente'?`<button onclick="masterAprobarStreamer('${u.id}')" class="btn-sm green" style="padding:4px 8px;font-size:10px">✓ Aprobar</button>`:''}
-        <button onclick="masterGestionarUsuario('${u.id}','${u.estado==='activo'?'suspender':'activar'}')" class="btn-sm ${u.estado==='activo'?'danger':''}" style="padding:4px 8px;font-size:10px">${u.estado==='activo'?'Suspender':'Activar'}</button>
-        <button onclick="masterCambiarRol('${u.id}',prompt('Nuevo rol (usuario/streamer/admin/agencia/moderador):','${u.rol}'))" class="btn-sm neutral" style="padding:4px 8px;font-size:10px">Rol</button>
-      </div>`
-    ])
-  ));
+
+  cont.innerHTML = filtrados.map(u => {
+    const color = colores[u.rol] || '#fff';
+    const nv = u.rol==='streamer' ? window.getNivel?.(u.nivel||'bronce') : null;
+    return `
+      <div class="card" style="margin-bottom:10px;border-color:${color}18">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <!-- AVATAR -->
+          <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,${color}30,${color}10);border:2px solid ${color}40;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:18px;font-weight:700;color:${color};flex-shrink:0">
+            ${(u.nick||u.nombre||'?')[0].toUpperCase()}
+          </div>
+
+          <!-- INFO -->
+          <div style="flex:1;min-width:120px">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-weight:700;font-size:14px;color:#fff">@${u.nick||u.nombre||'?'}</span>
+              ${nv ? `<span style="font-size:12px">${nv.emoji} <span style="color:var(--gold);font-size:10px">${nv.nombre}</span></span>` : ''}
+              <span class="badge ${u.estado==='activo'?'badge-green':u.estado==='pendiente'?'badge-orange':'badge-red'}" style="font-size:9px">${u.estado||'activo'}</span>
+            </div>
+            <div style="font-size:11px;color:var(--mu);margin-top:2px">${u.email||'—'} · ${u.pais||'—'}</div>
+            ${u.rol==='streamer'?`<div style="font-size:10px;color:var(--gold);margin-top:2px">⭐ ${(u.estrellas||0).toLocaleString()} · Pago: ${u.frecuencia_pago||'mensual'}${u.agencia_nick?' · 🏢 @'+u.agencia_nick:''}</div>`:''}
+            ${u.rol==='agencia'?`<div style="font-size:10px;color:#A78BFA;margin-top:2px">⭐ ${(u.estrellas||0).toLocaleString()} estrellas acumuladas</div>`:''}
+          </div>
+
+          <!-- ACCIONES -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+            ${u.estado==='pendiente'?`
+              <button onclick="masterAprobarStreamer('${u.id}')" class="btn-sm green" style="padding:6px 10px;font-size:11px">✓ Aprobar</button>
+            `:''}
+            <button onclick="masterEditarUsuario('${u.id}','${u.nick||u.nombre}','${u.email}')"
+              style="padding:6px 10px;border-radius:8px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:#60A5FA;font-size:11px;font-weight:700;cursor:pointer">
+              ✏️ Editar
+            </button>
+            ${u.rol==='streamer'?`
+              <button onclick="masterAsignarAgencia('${u.id}','${u.nick||u.nombre}')"
+                style="padding:6px 10px;border-radius:8px;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#A78BFA;font-size:11px;font-weight:700;cursor:pointer">
+                🏢 Agencia
+              </button>
+            `:''}
+            <button onclick="masterGestionarUsuario('${u.id}','${u.estado==='activo'?'suspender':'activar'}')"
+              style="padding:6px 10px;border-radius:8px;background:${u.estado==='activo'?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)'};border:1px solid ${u.estado==='activo'?'rgba(239,68,68,0.3)':'rgba(34,197,94,0.3)'};color:${u.estado==='activo'?'#EF4444':'#22c55e'};font-size:11px;font-weight:700;cursor:pointer">
+              ${u.estado==='activo'?'Suspender':'Activar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
+
+// Modal editar usuario (nick, email, contraseña)
+window.masterEditarUsuario = function(uid, nick, email) {
+  const existing = document.getElementById('masterEditModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'masterEditModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)';
+  modal.innerHTML = `
+    <div style="background:var(--black3);border:1px solid rgba(212,175,55,0.3);border-radius:20px;padding:24px;width:100%;max-width:360px">
+      <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:16px">✏️ Editar @${nick}</div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Nuevo nick</div>
+        <div class="input-group">
+          <span class="input-icon">@</span>
+          <input type="text" id="editNick" placeholder="Nick" value="${nick}">
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Email</div>
+        <div class="input-group">
+          <span class="input-icon">✉️</span>
+          <input type="email" id="editEmail" placeholder="Email" value="${email}">
+        </div>
+      </div>
+
+      <div style="margin-bottom:6px">
+        <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Nueva contraseña <span style="color:rgba(255,255,255,0.3)">(dejar vacío para no cambiar)</span></div>
+        <div class="input-group">
+          <span class="input-icon">🔒</span>
+          <input type="password" id="editPass" placeholder="Nueva contraseña">
+        </div>
+      </div>
+
+      <div style="font-size:10px;color:rgba(255,165,0,0.7);margin-bottom:16px;padding:8px;background:rgba(255,165,0,0.06);border-radius:8px">
+        ⚠️ Cambiar contraseña requiere que el usuario vuelva a iniciar sesión
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('masterEditModal').remove()" style="flex:1;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--mu);cursor:pointer;font-weight:700">Cancelar</button>
+        <button onclick="masterGuardarEdicion('${uid}')" class="btn-primary" style="flex:1;padding:12px">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+};
+
+window.masterGuardarEdicion = async function(uid) {
+  const nuevoNick = document.getElementById('editNick')?.value?.trim();
+  const nuevaPass = document.getElementById('editPass')?.value?.trim();
+  if (!nuevoNick) { toast('El nick no puede estar vacío','error'); return; }
+
+  try {
+    const datos = { nick: nuevoNick };
+    await window.fsSet('usuarios', uid, datos);
+
+    // Si hay nueva contraseña, usar Firebase Admin (solo disponible server-side)
+    // En cliente mostramos instrucción
+    if (nuevaPass && nuevaPass.length >= 6) {
+      toast('✅ Nick actualizado. Para cambiar contraseña usa Firebase Console → Authentication','success');
+    } else if (nuevaPass && nuevaPass.length < 6) {
+      toast('La contraseña debe tener al menos 6 caracteres','error');
+      return;
+    } else {
+      toast(`✅ @${nuevoNick} actualizado correctamente`,'success');
+    }
+
+    window.fsAdd?.('logs_master',{accion:`Perfil editado: @${nuevoNick}`, uid_master: window._currentPerfil?.uid, tipo:'edicion'});
+    document.getElementById('masterEditModal')?.remove();
+    navigate('streamers');
+  } catch(e) { toast('Error: '+e.message,'error'); }
+};
 
 window.masterFiltrarUsers = function(q) {
   if (!window._masterUsuarios) return;
-  const filtered = q ? window._masterUsuarios.filter(u =>
+  // Obtener tab activo
+  const tabs = ['streamer','usuario','agencia','admin','moderador'];
+  let tabActivo = 'streamer';
+  tabs.forEach(t => {
+    const btn = document.getElementById('tab_'+t);
+    if (btn && btn.style.color !== 'var(--mu)' && btn.style.color !== '') tabActivo = t;
+  });
+  let filtered = window._masterUsuarios.filter(u => u.rol === tabActivo);
+  if (q) filtered = filtered.filter(u =>
     (u.nick||'').toLowerCase().includes(q.toLowerCase()) ||
     (u.email||'').toLowerCase().includes(q.toLowerCase()) ||
     (u.nombre||'').toLowerCase().includes(q.toLowerCase())
-  ) : window._masterUsuarios;
-  renderMasterUsers(filtered);
+  );
+  renderMasterUsers(filtered.length>0 || q ? filtered : window._masterUsuarios.filter(u=>u.rol===tabActivo), tabActivo);
 };
 
 // ── 5. AGENCIAS ───────────────────────────
