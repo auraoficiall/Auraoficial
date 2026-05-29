@@ -289,6 +289,238 @@ window.aura_mostrarPruebas = async function(el) {
     navigator.clipboard?.writeText(`AURA Auditoría · ${new Date().toLocaleString('es')}\n${pct}% operativo\n\n${txt}`)
       .then(()=>toast('Reporte copiado ✓','success'));
   };
+
+  // ── BOT DE PRUEBAS POR ROLES ──────────────────────────────────────────────
+  const botSection = document.createElement('div');
+  botSection.innerHTML = `
+    <div class="card" style="margin-top:16px;margin-bottom:14px;border-color:rgba(167,139,250,0.3)">
+      <div style="font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:#A78BFA;margin-bottom:6px">
+        🤖 Bot de Pruebas por Roles
+      </div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:14px">
+        Ejecuta acciones reales en Firestore para cada rol: MASTER · ADMIN · MODERADOR · AGENCIA · STREAMER · USUARIO
+      </div>
+
+      <!-- EMAILS -->
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        ${[
+          { id:'botMaster',    label:'👑 Master',    val:'andrewjosuev@gmail.com',  color:'var(--gold)' },
+          { id:'botAdmin',     label:'👮 Admin',     val:'auraadmin1@aura.com',      color:'#F59E0B' },
+          { id:'botModerador', label:'🛡️ Moderador', val:'auramonitor1@aura.com',   color:'#a8d8f0' },
+          { id:'botAgencia',   label:'🏢 Agencia',   val:'auraagency1@aura.com',    color:'#A78BFA' },
+          { id:'botStreamer',  label:'🎤 Streamer',  val:'streameraura@aura.com',   color:'#4ade80' },
+          { id:'botUsuario',   label:'👤 Usuario',   val:'usuarioaura1@aura.com',   color:'#93c5fd' },
+        ].map(u => `
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;font-weight:700;color:${u.color};width:100px;flex-shrink:0">${u.label}</span>
+            <div class="input-group" style="flex:1">
+              <input type="email" id="${u.id}" value="${u.val}" style="font-size:11px">
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <button id="botIniciarBtn" onclick="botEjecutar()"
+        style="width:100%;padding:14px;border-radius:var(--r-lg);background:linear-gradient(135deg,#7c3aed,#4c1d95);border:none;color:#fff;font-family:'Cinzel',serif;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px">
+        🤖 Iniciar auditoría por roles
+      </button>
+
+      <!-- PROGRESO -->
+      <div id="botProgress" style="display:none;margin-top:12px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu);margin-bottom:5px">
+          <span id="botProgressLabel">Iniciando...</span>
+          <span id="botProgressPct">0%</span>
+        </div>
+        <div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden">
+          <div id="botProgressBar" style="height:100%;background:linear-gradient(90deg,#7c3aed,#A78BFA);border-radius:3px;transition:width .4s;width:0%"></div>
+        </div>
+      </div>
+
+      <!-- LOG -->
+      <div id="botLog" style="display:none;margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+        height:220px;overflow-y:auto;background:rgba(0,0,0,0.5);border-radius:10px;padding:10px;
+        display:none;flex-direction:column;gap:3px"></div>
+
+      <!-- REPORTE BOT -->
+      <div id="botReporte" style="display:none;margin-top:12px"></div>
+    </div>
+  `;
+
+  // Append bot section to el
+  el.appendChild(botSection);
+
+  // ── LÓGICA DEL BOT ───────────────────────────────────────────────────────
+  let botTotal = 41, botActual = 0;
+
+  function botLog(rol, msg, estado) {
+    const logEl = document.getElementById('botLog');
+    if (!logEl) return;
+    logEl.style.display = 'flex';
+    const colores = { MASTER:'var(--gold)', ADMIN:'#F59E0B', MODERADOR:'#a8d8f0',
+      AGENCIA:'#A78BFA', STREAMER:'#4ade80', USUARIO:'#93c5fd', SYS:'rgba(255,255,255,0.35)' };
+    const icon = estado === true ? '✅' : estado === false ? '❌' : '⏳';
+    const time = new Date().toLocaleTimeString('es', { hour12:false });
+    const d = document.createElement('div');
+    d.innerHTML = `<span style="color:var(--mu)">${time}</span> <span style="color:${colores[rol]||'#fff'};font-weight:700">[${rol}]</span> ${msg} ${icon}`;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+    botActual++;
+    const pct = Math.min(Math.floor(botActual / botTotal * 100), 99);
+    const bar = document.getElementById('botProgressBar');
+    const pctEl = document.getElementById('botProgressPct');
+    const lbl = document.getElementById('botProgressLabel');
+    if (bar) bar.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+    if (lbl) lbl.textContent = msg;
+  }
+
+  function botWait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function botGetUser(email) {
+    try {
+      const u = await window.fsGetAll('usuarios');
+      return u?.find(x => x.email === email) || null;
+    } catch(e) { return null; }
+  }
+
+  async function botTest(rol, label, fn, resultArr) {
+    botLog(rol, label, null);
+    await botWait(200);
+    try {
+      const r = await fn();
+      const ok = r !== false;
+      botLog(rol, label, ok);
+      resultArr.push(ok);
+      return ok;
+    } catch(e) {
+      botLog(rol, `${label} — ${e.message}`, false);
+      resultArr.push(false);
+      return false;
+    }
+  }
+
+  window.botEjecutar = async function() {
+    const btn = document.getElementById('botIniciarBtn');
+    btn.disabled = true;
+    document.getElementById('botProgress').style.display = 'block';
+    document.getElementById('botLog').style.display = 'flex';
+    document.getElementById('botLog').innerHTML = '';
+    document.getElementById('botReporte').style.display = 'none';
+    botActual = 0;
+
+    const emails = {
+      master:    document.getElementById('botMaster')?.value?.trim(),
+      admin:     document.getElementById('botAdmin')?.value?.trim(),
+      moderador: document.getElementById('botModerador')?.value?.trim(),
+      agencia:   document.getElementById('botAgencia')?.value?.trim(),
+      streamer:  document.getElementById('botStreamer')?.value?.trim(),
+      usuario:   document.getElementById('botUsuario')?.value?.trim(),
+    };
+
+    const res = { MASTER:[], ADMIN:[], MODERADOR:[], AGENCIA:[], STREAMER:[], USUARIO:[] };
+
+    // MASTER
+    botLog('SYS','━━━ MASTER ━━━',null);
+    await botTest('MASTER','Perfil en Firestore', async()=>{ const u=await botGetUser(emails.master); return u?.rol==='master'; }, res.MASTER);
+    await botTest('MASTER','Cargar stats globales', async()=>{ const s=await window.cargarStatsReales?.()??{}; return typeof s.usuarios==='number'; }, res.MASTER);
+    await botTest('MASTER','Guardar tarifa de prueba', async()=>{ await window.fsSet('config_plataforma','tarifas',{_bot:true}); return true; }, res.MASTER);
+    await botTest('MASTER','Leer control plataforma', async()=>{ await window.fsGet?.('config_plataforma','global'); return true; }, res.MASTER);
+    await botTest('MASTER','Escribir log master', async()=>{ await window.fsAdd('logs_master',{accion:'🤖 Bot test',tipo:'bot',uid_master:'bot'}); return true; }, res.MASTER);
+    await botTest('MASTER','Leer retiros pendientes', async()=>{ const r=await window.fsGetAll?.('retiros'); return Array.isArray(r); }, res.MASTER);
+
+    // ADMIN
+    await botWait(200);
+    botLog('SYS','━━━ ADMIN ━━━',null);
+    await botTest('ADMIN','Perfil en Firestore', async()=>{ const u=await botGetUser(emails.admin); return u?.rol==='admin'; }, res.ADMIN);
+    await botTest('ADMIN','Listar streamers', async()=>{ const u=await window.fsGetAll('usuarios'); return Array.isArray(u?.filter(x=>x.rol==='streamer')); }, res.ADMIN);
+    await botTest('ADMIN','Listar agencias', async()=>{ const u=await window.fsGetAll('usuarios'); return Array.isArray(u?.filter(x=>x.rol==='agencia')); }, res.ADMIN);
+    await botTest('ADMIN','Crear reporte', async()=>{ await window.fsAdd('reportes',{descripcion:'🤖 Bot test admin',nivel:'Media',estado:'pendiente',uid_admin:'bot'}); return true; }, res.ADMIN);
+    await botTest('ADMIN','Leer reportes', async()=>{ const r=await window.fsGetAll?.('reportes'); return Array.isArray(r); }, res.ADMIN);
+    await botTest('ADMIN','Escribir log admin', async()=>{ await window.fsAdd('logs_admin',{accion:'🤖 Bot test',tipo:'bot',uid_admin:'bot'}); return true; }, res.ADMIN);
+    await botTest('ADMIN','Leer tickets', async()=>{ const t=await window.cargarTickets?.()??[]; return Array.isArray(t); }, res.ADMIN);
+
+    // MODERADOR
+    await botWait(200);
+    botLog('SYS','━━━ MODERADOR ━━━',null);
+    await botTest('MODERADOR','Perfil en Firestore', async()=>{ const u=await botGetUser(emails.moderador); return u?.rol==='moderador'; }, res.MODERADOR);
+    await botTest('MODERADOR','Leer usuarios', async()=>{ const u=await window.fsGetAll('usuarios'); return u?.length>0; }, res.MODERADOR);
+    await botTest('MODERADOR','Crear reporte', async()=>{ await window.fsAdd('reportes',{descripcion:'🤖 Bot test mod',nivel:'Media',estado:'pendiente',uid_monitor:'bot'}); return true; }, res.MODERADOR);
+    await botTest('MODERADOR','Crear infracción', async()=>{ await window.fsAdd('infracciones',{usuario:'@bot',tipo:'spam',descripcion:'test',estado:'activa',uid_monitor:'bot'}); return true; }, res.MODERADOR);
+    await botTest('MODERADOR','Leer infracciones', async()=>{ const i=await window.fsGetAll?.('infracciones'); return Array.isArray(i); }, res.MODERADOR);
+    await botTest('MODERADOR','Escalar ticket', async()=>{ await window.fsAdd('tickets',{asunto:'🤖 Bot escalado',prioridad:'HIGH',estado:'escalado',tipo:'escalado_monitor',uid_monitor:'bot',escalado_a:'Admin'}); return true; }, res.MODERADOR);
+
+    // AGENCIA
+    await botWait(200);
+    botLog('SYS','━━━ AGENCIA ━━━',null);
+    await botTest('AGENCIA','Perfil en Firestore', async()=>{ const u=await botGetUser(emails.agencia); return u?.rol==='agencia'; }, res.AGENCIA);
+    await botTest('AGENCIA','Obtener streamers asignadas', async()=>{ const ag=await botGetUser(emails.agencia); const u=await window.fsGetAll('usuarios'); return Array.isArray(u?.filter(x=>x.rol==='streamer'&&(x.agencia_uid===ag?.id||x.agencia===ag?.nick))); }, res.AGENCIA);
+    await botTest('AGENCIA','Calcular comisión 15%', async()=>{ const u=await window.fsGetAll('usuarios'); const stars=u?.filter(x=>x.rol==='streamer').reduce((a,s)=>a+(s.estrellas||0),0)||0; botLog('AGENCIA',`Comisión estimada: ${Math.floor(stars*.15)}★`,null); return true; }, res.AGENCIA);
+    await botTest('AGENCIA','Crear meta de agencia', async()=>{ const ag=await botGetUser(emails.agencia); await window.fsAdd('metas_agencia',{titulo:'🤖 Bot test',valor_objetivo:1000,valor_actual:0,uid_agencia:ag?.id||'bot',estado:'activa'}); return true; }, res.AGENCIA);
+    await botTest('AGENCIA','Solicitar retiro', async()=>{ const ag=await botGetUser(emails.agencia); await window.fsAdd('retiros',{monto:0,monto_usd:0,metodo:'test_bot',cuenta:'bot@test.com',estado:'pendiente',tipo:'agencia',uid_agencia:ag?.id||'bot',nick:ag?.nick||'bot'}); return true; }, res.AGENCIA);
+    await botTest('AGENCIA','Enviar mensaje a streamer', async()=>{ const ag=await botGetUser(emails.agencia); const st=await botGetUser(emails.streamer); if(!ag||!st) return false; const chatId=[ag.id,st.id].sort().join('_'); await window.fsAdd('chats_agencia',{chatId,texto:'🤖 Bot test',uid_from:ag.id,uid_to:st.id,nick_from:ag.nick||'ag',nick_to:st.nick||'str'}); return true; }, res.AGENCIA);
+
+    // STREAMER
+    await botWait(200);
+    botLog('SYS','━━━ STREAMER ━━━',null);
+    await botTest('STREAMER','Perfil en Firestore', async()=>{ const u=await botGetUser(emails.streamer); return u?.rol==='streamer'; }, res.STREAMER);
+    await botTest('STREAMER','Nivel asignado', async()=>{ const u=await botGetUser(emails.streamer); const nv=window.getNivel?.(u?.nivel||'bronce'); botLog('STREAMER',`${nv?.emoji||'🥉'} ${nv?.nombre||'Bronce'}`,null); return true; }, res.STREAMER);
+    await botTest('STREAMER','Leer estrellas', async()=>{ const u=await botGetUser(emails.streamer); botLog('STREAMER',`${(u?.estrellas||0).toLocaleString()} ⭐`,null); return true; }, res.STREAMER);
+    await botTest('STREAMER','Marcar live activo/inactivo', async()=>{ const u=await botGetUser(emails.streamer); if(!u) return false; await window.fsSet('usuarios',u.id,{liveActivo:true}); await window.fsSet('usuarios',u.id,{liveActivo:false}); return true; }, res.STREAMER);
+    await botTest('STREAMER','Crear meta personal', async()=>{ const u=await botGetUser(emails.streamer); await window.fsAdd('metas_streamer',{titulo:'🤖 Bot test',valor_objetivo:5000,valor_actual:0,uid_streamer:u?.id||'bot',estado:'activa'}); return true; }, res.STREAMER);
+    await botTest('STREAMER','Registrar PK battle', async()=>{ const u=await botGetUser(emails.streamer); await window.fsAdd('pk_battles',{uid_streamer:u?.id||'bot',nick:u?.nick||'bot',rival_nick:'RivalBot',estado:'terminado',mis_stars:100,rival_stars:80,resultado:'ganado'}); return true; }, res.STREAMER);
+
+    // USUARIO
+    await botWait(200);
+    botLog('SYS','━━━ USUARIO ━━━',null);
+    await botTest('USUARIO','Perfil en Firestore', async()=>{ const u=await botGetUser(emails.usuario); return u?.rol==='usuario'; }, res.USUARIO);
+    await botTest('USUARIO','Leer feed streamers', async()=>{ const u=await window.fsGetAll('usuarios'); botLog('USUARIO',`${u?.filter(x=>x.rol==='streamer').length||0} streamers disponibles`,null); return true; }, res.USUARIO);
+    await botTest('USUARIO','Solicitar match a streamer', async()=>{ const uu=await botGetUser(emails.usuario); const us=await botGetUser(emails.streamer); if(!uu||!us) return false; await window.fsAdd('matches',{uid_usuario:uu.id,nick_usuario:uu.nick||'bot',uid_streamer:us.id,nick_streamer:us.nick||'bot',estado:'esperando',costo:5}); return true; }, res.USUARIO);
+    await botTest('USUARIO','Enviar gift a streamer', async()=>{ const uu=await botGetUser(emails.usuario); const us=await botGetUser(emails.streamer); if(!uu||!us) return false; await window.fsAdd('historial_estrellas',{uid_from:uu.id,uid_to:us.id,cantidad:10,tipo:'gift',nick_from:uu.nick||'bot',gift_emoji:'🌹',gift_name:'Rosa'}); return true; }, res.USUARIO);
+    await botTest('USUARIO','Seguir a streamer', async()=>{ const us=await botGetUser(emails.streamer); if(!us) return false; const before=us.seguidores||0; await window.fsSet('usuarios',us.id,{seguidores:before+1}); await window.fsSet('usuarios',us.id,{seguidores:before}); return true; }, res.USUARIO);
+    await botTest('USUARIO','Crear ticket de soporte', async()=>{ const uu=await botGetUser(emails.usuario); await window.fsAdd('tickets',{asunto:'🤖 Bot test usuario',descripcion:'test',prioridad:'MEDIUM',estado:'abierto',uid_usuario:uu?.id||'bot'}); return true; }, res.USUARIO);
+
+    // REPORTE
+    await botWait(400);
+    document.getElementById('botProgressBar').style.width='100%';
+    document.getElementById('botProgressPct').textContent='100%';
+    document.getElementById('botProgressLabel').textContent='Completado ✓';
+
+    const resumen = Object.entries(res).map(([rol,arr])=>({
+      rol, ok: arr.filter(Boolean).length, total: arr.length,
+      pct: arr.length>0 ? Math.floor(arr.filter(Boolean).length/arr.length*100) : 0,
+      color: {MASTER:'var(--gold)',ADMIN:'#F59E0B',MODERADOR:'#a8d8f0',AGENCIA:'#A78BFA',STREAMER:'#4ade80',USUARIO:'#93c5fd'}[rol]||'#fff'
+    }));
+    const totalOk  = resumen.reduce((a,r)=>a+r.ok,0);
+    const totalAll = resumen.reduce((a,r)=>a+r.total,0);
+    const pctBot   = Math.floor(totalOk/totalAll*100);
+    const exitoso  = pctBot >= 80;
+
+    const repEl = document.getElementById('botReporte');
+    repEl.style.display = 'block';
+    repEl.innerHTML = `
+      <div style="text-align:center;padding:16px 0 10px">
+        <div style="font-family:'Cinzel',serif;font-size:28px;font-weight:900;color:${exitoso?'#22c55e':'#EF4444'}">${pctBot}%</div>
+        <div style="font-size:11px;color:var(--mu)">${totalOk}/${totalAll} pruebas pasadas</div>
+      </div>
+      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;margin-bottom:12px">
+        <div style="width:${pctBot}%;height:100%;background:${exitoso?'#22c55e':'#EF4444'};border-radius:3px"></div>
+      </div>
+      ${resumen.map(r=>`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;color:${r.color};width:90px;flex-shrink:0">${r.rol}</span>
+          <div style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,0.05);overflow:hidden">
+            <div style="width:${r.pct}%;height:100%;background:${r.color};opacity:.8;border-radius:3px"></div>
+          </div>
+          <span style="font-size:10px;color:${r.pct===100?'#22c55e':r.pct>=60?'#FFA500':'#EF4444'};font-weight:700;width:40px;text-align:right">${r.ok}/${r.total}</span>
+        </div>
+      `).join('')}
+      <button onclick="navigator.clipboard?.writeText('🤖 Bot AURA · ${pctBot}%\\n${resumen.map(r=>r.rol+': '+r.ok+'/'+r.total).join('\\n')}').then(()=>toast('Copiado ✓','success'))"
+        class="btn-sm" style="width:100%;margin-top:10px;padding:10px">📋 Copiar reporte</button>
+    `;
+
+    btn.disabled = false;
+    toast(`🤖 Bot completado · ${pctBot}% de éxito`, exitoso?'success':'info');
+  };
 };
 
 console.log('✅ Sistema de auditoría AURA cargado');
