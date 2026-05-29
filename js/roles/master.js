@@ -450,6 +450,75 @@ window.masterFiltrarUsers = function(q) {
   renderMasterUsers(filtered.length>0 || q ? filtered : window._masterUsuarios.filter(u=>u.rol===tabActivo), tabActivo);
 };
 
+window.masterAsignarAgencia = async function(uid_str, nick_str) {
+  try {
+    const todos = await window.fsGetAll('usuarios');
+    const ags = todos.filter(function(u){ return u.rol==='agencia'; });
+    if (ags.length === 0) { toast('No hay agencias registradas','error'); return; }
+    var el = document.getElementById('modalAg'); if(el) el.remove();
+    var m = document.createElement('div');
+    m.id = 'modalAg';
+    m.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px';
+    var h = '<div style="background:#1a1a1a;border:1px solid #7c3aed;border-radius:20px;padding:24px;width:100%;max-width:340px">';
+    h += '<div style="font-size:15px;font-weight:700;color:#A78BFA;margin-bottom:14px">🏢 Asignar a Agencia</div>';
+    for(var i=0;i<ags.length;i++) {
+      var a=ags[i], an=a.nick||a.nombre||'?';
+      h += '<div onclick="window._selAg(\''+a.id+'\',\''+an+'\');masterConfirmarAgencia(\''+uid_str+'\',\''+nick_str+'\',\''+a.id+'\',\''+an+'\')" style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);margin-bottom:8px;cursor:pointer;color:#fff;font-weight:600">🏢 @'+an+'<br><small style=color:#888>'+( a.email||'')+'</small></div>';
+    }
+    h += '<button onclick="document.getElementById(\'modalAg\').remove()" style="width:100%;padding:10px;margin-top:4px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#888;cursor:pointer">Cancelar</button></div>';
+    m.innerHTML = h;
+    document.body.appendChild(m);
+  } catch(e){ toast('Error: '+e.message,'error'); }
+};
+
+window.masterConfirmarAgencia = async function(uid_streamer, nick_streamer, uid_agencia, nick_agencia) {
+  document.getElementById('modalAgencia')?.remove();
+  try {
+    await window.fsSet('usuarios', uid_streamer, { agencia_uid: uid_agencia, agencia_nick: nick_agencia });
+    await window.fsAdd('logs_master', { accion:'@'+nick_streamer+' → agencia @'+nick_agencia, uid_master: window._currentPerfil?.uid, tipo:'agencia' });
+    toast('✅ @'+nick_streamer+' asignada a @'+nick_agencia,'success');
+    cargarUsuariosReales().then(u => { window._masterUsuarios = u; renderMasterUsers(u,'streamer'); });
+  } catch(e) { toast('Error: '+e.message,'error'); }
+};
+
+window.masterAsignarAgencia = async function(uid_str, nick_str) {
+  try {
+    const todos = await window.fsGetAll('usuarios');
+    const ags = todos.filter(u => u.rol === 'agencia');
+    if (!ags.length) { toast('No hay agencias registradas','error'); return; }
+    document.getElementById('modalAg')?.remove();
+    const m = document.createElement('div');
+    m.id = 'modalAg';
+    m.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px';
+    const items = ags.map(a => {
+      const an = a.nick||a.nombre||'?';
+      return `<div data-uid="${a.id}" data-nick="${an}" style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(167,139,250,0.2);margin-bottom:8px;cursor:pointer;color:#fff;font-weight:600">🏢 @${an}<br><small style="color:#888;font-weight:400">${a.email||''}</small></div>`;
+    }).join('');
+    m.innerHTML = `<div style="background:#1a1a1a;border:2px solid #7c3aed;border-radius:20px;padding:24px;width:100%;max-width:340px">
+      <div style="font-size:15px;font-weight:700;color:#A78BFA;margin-bottom:14px">🏢 Asignar a Agencia</div>
+      <div id="agListItems">${items}</div>
+      <button onclick="document.getElementById('modalAg').remove()" style="width:100%;padding:10px;margin-top:4px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#888;cursor:pointer;font-weight:700">Cancelar</button>
+    </div>`;
+    document.body.appendChild(m);
+    // Add click handlers after mount
+    m.querySelectorAll('[data-uid]').forEach(el => {
+      el.addEventListener('click', () => {
+        masterConfirmarAgencia(uid_str, nick_str, el.dataset.uid, el.dataset.nick);
+      });
+    });
+  } catch(e){ toast('Error: '+e.message,'error'); }
+};
+
+window.masterConfirmarAgencia = async function(uid_streamer, nick_streamer, uid_agencia, nick_agencia) {
+  var el = document.getElementById('modalAg'); if(el) el.remove();
+  try {
+    await window.fsSet('usuarios', uid_streamer, { agencia_uid: uid_agencia, agencia_nick: nick_agencia });
+    await window.fsAdd('logs_master', { accion:'@'+nick_streamer+' → agencia @'+nick_agencia, uid_master: window._currentPerfil?.uid, tipo:'agencia' });
+    toast('✅ @'+nick_streamer+' asignada a @'+nick_agencia,'success');
+    cargarUsuariosReales().then(function(u){ window._masterUsuarios=u; renderMasterUsers(u,'streamer'); });
+  } catch(e){ toast('Error: '+e.message,'error'); }
+};
+
 // ── 5. AGENCIAS ───────────────────────────
 function master_agencies(el, p) {
   el.innerHTML = `
