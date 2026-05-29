@@ -2230,9 +2230,9 @@ function str_perfil(el, p) {
       </div>
 
       <!-- MI NIVEL ACTUAL -->
-      <div class="card" style="margin-bottom:14px;background:rgba(212,175,55,0.04);border-color:rgba(212,175,55,0.2)">
-        <div class="section-title" style="margin-bottom:12px">🏆 Mi nivel y comisiones</div>
-        <div id="strNivelInfo" style="text-align:center;padding:10px;color:var(--mu)">Cargando...</div>
+      <div class="card" style="margin-bottom:14px;background:rgba(34,197,94,0.04);border-color:rgba(34,197,94,0.2)">
+        <div class="section-title" style="margin-bottom:12px">🏆 Mi nivel</div>
+        <div id="strNivelInfo" style="color:var(--mu)">Cargando...</div>
       </div>
 
       <button class="btn-primary" onclick="strGuardarPerfil()" style="width:100%;padding:16px;margin-bottom:10px">Guardar perfil</button>
@@ -2262,22 +2262,29 @@ function str_perfil(el, p) {
     const badge = document.getElementById('strNivelBadge');
     if (badge && nv) badge.textContent = `${nv.emoji} ${nv.nombre}`;
 
-    // Nivel info
+    // Nivel info — solo muestra ganancias reales en $ y ⭐
     const nivelInfo = document.getElementById('strNivelInfo');
     if (nivelInfo && nv) {
+      // Calcular ganancias reales de la streamer
+      const estrellasGanadas = perfil.estrellas || 0;
+      const usdGanados = (estrellasGanadas / 200).toFixed(2);
       nivelInfo.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-          <div style="padding:10px;background:rgba(34,197,94,0.08);border-radius:10px;border:1px solid rgba(34,197,94,0.2)">
-            <div style="font-size:10px;color:var(--mu)">Tú recibes</div>
-            <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:#22c55e">${nv.streamer}%</div>
+        <div style="display:flex;align-items:center;gap:12px;padding:10px;margin-bottom:12px">
+          <div style="font-size:36px">${nv.emoji}</div>
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:var(--gold)">${nv.nombre}</div>
+            <div style="font-size:11px;color:var(--mu);margin-top:3px">Tu nivel · Sube cumpliendo metas semanales</div>
           </div>
-          <div style="padding:10px;background:rgba(167,139,250,0.08);border-radius:10px;border:1px solid rgba(167,139,250,0.2)">
-            <div style="font-size:10px;color:var(--mu)">Agencia</div>
-            <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:#A78BFA">${nv.agencia}%</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="padding:14px;background:rgba(34,197,94,0.08);border-radius:12px;border:1px solid rgba(34,197,94,0.2);text-align:center">
+            <div style="font-size:10px;color:var(--mu);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Mis estrellas</div>
+            <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:900;color:#22c55e">${estrellasGanadas.toLocaleString()} ⭐</div>
           </div>
-          <div style="padding:10px;background:rgba(212,175,55,0.08);border-radius:10px;border:1px solid rgba(212,175,55,0.2)">
-            <div style="font-size:10px;color:var(--mu)">AURA</div>
-            <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:var(--gold)">${nv.master}%</div>
+          <div style="padding:14px;background:rgba(34,197,94,0.08);border-radius:12px;border:1px solid rgba(34,197,94,0.2);text-align:center">
+            <div style="font-size:10px;color:var(--mu);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Mis ganancias</div>
+            <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:900;color:#22c55e">$${usdGanados}</div>
+            <div style="font-size:9px;color:var(--mu);margin-top:2px">USD · 200⭐ = $1</div>
           </div>
         </div>
         ${perfil.modo_prueba?`<div style="margin-top:10px;padding:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;font-size:11px;color:#EF4444;text-align:center">⚠️ Estás en Modo Prueba · Semana ${perfil.semanas_prueba||0}/2</div>`:''}

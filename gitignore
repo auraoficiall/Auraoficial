@@ -1,0 +1,4 @@
+push.bat
+*.bat
+.env
+node_modules/

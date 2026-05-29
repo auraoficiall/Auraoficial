@@ -195,32 +195,95 @@ function ag_ganancias(el, p) {
   el.innerHTML = `
     <div class="dash-welcome aura-fade-up">
       <h1>💰 <span>Ganancias</span></h1>
-      <p>Comisiones y pagos de tu agencia</p>
+      <p>Lo que ha generado tu agencia</p>
     </div>
     <div id="agGanContent">
       <div style="text-align:center;padding:20px;color:var(--mu)">Cargando...</div>
     </div>
   `;
 
-  agCargarMisStreamers(p).then(streamers => {
-    const totalStars = streamers.reduce((a,s)=>a+(s.estrellas||0),0);
-    const comision = Math.floor(totalStars * 0.15);
+  agCargarMisStreamers(p).then(async streamers => {
     const cont = document.getElementById('agGanContent');
     if (!cont) return;
+
+    // Cargar historial de estrellas para calcular comisiones reales
+    const historial = await window.fsGetAll?.('historial_estrellas').catch(()=>[]) || [];
+    const misStreamersIds = streamers.map(s => s.id);
+
+    // Filtrar transacciones de mis streamers
+    const misTx = historial.filter(h => misStreamersIds.includes(h.uid_to));
+
+    // Calcular comisión real por streamer según su nivel
+    const porStreamer = {};
+    streamers.forEach(s => {
+      porStreamer[s.id] = { nick: s.nick||s.nombre, nivel: s.nivel||'bronce', estrellas_brutas: 0, mi_comision: 0 };
+    });
+
+    misTx.forEach(h => {
+      if (!porStreamer[h.uid_to]) return;
+      porStreamer[h.uid_to].estrellas_brutas += h.cantidad || 0;
+      porStreamer[h.uid_to].mi_comision += h.dist_agencia || 0;
+    });
+
+    // Si no hay historial, usar estrellas actuales con % del nivel
+    streamers.forEach(s => {
+      if (porStreamer[s.id].mi_comision === 0 && s.estrellas > 0) {
+        const nv = window.getNivel?.(s.nivel||'bronce');
+        porStreamer[s.id].mi_comision = Math.floor((s.estrellas||0) * (nv?.agencia||10) / (nv?.streamer||20));
+        porStreamer[s.id].estrellas_brutas = s.estrellas || 0;
+      }
+    });
+
+    const totalMiComision = Object.values(porStreamer).reduce((a,s)=>a+s.mi_comision,0);
+    const totalUSD = (totalMiComision / 200).toFixed(2);
+
     cont.innerHTML = `
-      <div style="padding:24px;border-radius:20px;background:linear-gradient(135deg,#0d0d0d,#1a0800);border:1px solid rgba(212,175,55,0.3);margin-bottom:20px;position:relative;overflow:hidden">
-        <div style="position:absolute;top:-40px;right:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(212,175,55,0.15),transparent 70%)"></div>
-        <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);margin-bottom:8px">Tu comisión disponible (15%)</div>
-        <div style="font-family:'Cinzel',serif;font-size:44px;font-weight:900;color:var(--gold)">${comision.toLocaleString()} ⭐</div>
-        <div style="font-size:12px;color:var(--mu);margin-top:6px">de ${totalStars.toLocaleString()} ⭐ generadas por tu equipo</div>
-        <button onclick="agSolicitarRetiro(${comision})" class="btn-primary" style="margin-top:16px;width:100%;padding:14px">💳 Solicitar retiro</button>
+      <!-- HERO GANANCIAS -->
+      <div style="padding:24px;border-radius:20px;background:linear-gradient(135deg,#0d0d0d,#1a0800);border:1px solid rgba(212,175,55,0.3);margin-bottom:16px">
+        <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);margin-bottom:8px">Mis ganancias totales</div>
+        <div style="font-family:'Cinzel',serif;font-size:44px;font-weight:900;color:var(--gold)">${totalMiComision.toLocaleString()} ⭐</div>
+        <div style="font-size:18px;color:#22c55e;font-weight:700;margin-top:6px">≈ $${totalUSD} USD</div>
+        <div style="font-size:11px;color:var(--mu);margin-top:4px">200⭐ = $1.00 USD</div>
+        <button onclick="agSolicitarRetiro(${totalMiComision},${totalUSD})" class="btn-primary" style="margin-top:16px;width:100%;padding:14px">💳 Solicitar retiro</button>
       </div>
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-label">👩 Streamers</div><div class="stat-value" style="color:#4ade80">${streamers.length}</div></div>
-        <div class="stat-card"><div class="stat-label">⭐ Total generado</div><div class="stat-value" style="color:var(--gold)">${totalStars.toLocaleString()}</div></div>
-        <div class="stat-card"><div class="stat-label">💰 Tu 15%</div><div class="stat-value" style="color:#22c55e">${comision.toLocaleString()}</div></div>
-        <div class="stat-card"><div class="stat-label">💳 Retiros</div><div class="stat-value">0</div></div>
-      </div>
+
+      <!-- DESGLOSE POR STREAMER -->
+      ${agCard(`
+        <div class="section-title" style="margin-bottom:14px">👩 Ganancias por streamer</div>
+        ${streamers.length === 0
+          ? '<div style="text-align:center;padding:20px;color:var(--mu)">No tienes streamers asignadas aún.</div>'
+          : streamers.map(s => {
+              const d = porStreamer[s.id] || {mi_comision:0, estrellas_brutas:0};
+              const nv = window.getNivel?.(s.nivel||'bronce');
+              const usd = (d.mi_comision/200).toFixed(2);
+              return `
+                <div style="padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);margin-bottom:10px">
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                    <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,rgba(34,197,94,0.2),rgba(34,197,94,0.05));border:1px solid rgba(34,197,94,0.3);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#22c55e;flex-shrink:0">
+                      ${(s.nick||s.nombre||'?')[0].toUpperCase()}
+                    </div>
+                    <div style="flex:1">
+                      <div style="font-weight:700;color:#fff">@${s.nick||s.nombre}</div>
+                      <div style="font-size:10px;color:var(--mu)">${nv?.emoji||'🥉'} ${nv?.nombre||'Bronce'} · ${s.pais||'—'}</div>
+                    </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div style="padding:10px;background:rgba(34,197,94,0.06);border-radius:10px;text-align:center;border:1px solid rgba(34,197,94,0.15)">
+                      <div style="font-size:9px;color:var(--mu);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Mi comisión</div>
+                      <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#22c55e">${d.mi_comision.toLocaleString()} ⭐</div>
+                    </div>
+                    <div style="padding:10px;background:rgba(34,197,94,0.06);border-radius:10px;text-align:center;border:1px solid rgba(34,197,94,0.15)">
+                      <div style="font-size:9px;color:var(--mu);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">En dólares</div>
+                      <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#22c55e">$${usd}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')
+        }
+      `)}
+
+      <!-- RETIROS -->
       ${agCard(`
         <div class="section-title">📋 Historial de retiros</div>
         <div id="agRetirosList" style="text-align:center;padding:20px;color:var(--mu)">Cargando...</div>
@@ -229,15 +292,18 @@ function ag_ganancias(el, p) {
     agCargarRetiros(p);
   });
 
-  window.agSolicitarRetiro = function(monto) {
+  window.agSolicitarRetiro = function(monto, usd) {
     if (monto <= 0) { toast('No tienes saldo disponible','error'); return; }
-    const metodo = prompt('Método de pago:\n1. PayPal\n2. Transferencia\n3. Crypto\n\nEscribe el método:');
+    const metodo = prompt('Método de pago:\n1. PayPal\n2. Transferencia bancaria\n3. Crypto\n4. Zelle\n\nEscribe el método:');
     if (!metodo) return;
+    const cuenta = prompt('Ingresa tu cuenta/email/número para recibir el pago:');
+    if (!cuenta) return;
     window.fsAdd?.('retiros', {
-      monto, metodo, estado: 'pendiente',
+      monto, monto_usd: usd, metodo, cuenta,
+      estado: 'pendiente', tipo: 'agencia',
       uid_agencia: p.uid, nick: p.nick||p.nombre
     }).then(()=>{
-      toast(`Retiro de ${monto}★ solicitado ✓`,'success');
+      toast(`Retiro de $${usd} USD solicitado ✓ · El Master procesará tu pago`,'success');
       agCargarRetiros(p);
     }).catch(()=>toast('Error al solicitar','error'));
   };
